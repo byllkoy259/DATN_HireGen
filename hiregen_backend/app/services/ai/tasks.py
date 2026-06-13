@@ -8,9 +8,11 @@ from sqlalchemy import update
 from sqlalchemy.future import select
 
 from app.core.celery_app import celery_app
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal, engine
 from app.models.models import Application, JobDescription
 from app.services.ai.pdf_parser import get_and_parse_pdf_from_minio
+from app.services.ai.baseline import BASELINE_PIPELINE_VERSION, evaluate_baseline_cv_jd
 from app.services.ai.extractor import PROMPT_VERSION, extract_cv_to_json
 from app.services.ai.embedding import get_text_embedding
 from app.services.ai.matcher import baseline_match_cv_with_jd
@@ -24,10 +26,14 @@ except Exception as exc:
     print(f"[ChromaDB Warning] Vector store is unavailable: {exc}")
     cv_collection = None
 
-PIPELINE_VERSION = "hybrid_standardized_v2"
-RUBRIC_VERSION = "itss_category_rubric_v1"
+PIPELINE_VERSION = "hybrid_standardized_v3_general_guard"
+RUBRIC_VERSION = "itss_family_grouped_rubric_v2"
 MIN_CV_TEXT_LENGTH = 500
 MIN_JD_TEXT_LENGTH = 300
+MAX_ATTENTION_POINTS = 3
+MAX_CRITICAL_GAPS = 6
+MAX_TOTAL_GAPS = 8
+TECHNICAL_JOB_FAMILIES = {"BUSINESS_APP_DEV", "SYSTEM_DEV", "NETWORK_INFRA"}
 
 ITSS_RUBRICS = {
     "BUSINESS_APP_DEV": {
@@ -214,6 +220,31 @@ def flatten_text(value: Any) -> str:
     return str(value)
 
 
+CV_EVIDENCE_KEYS = (
+    "personal_info",
+    "education",
+    "experience",
+    "hard_skills",
+    "soft_skills",
+    "languages",
+    "skills",
+    "projects",
+    "certifications",
+)
+
+
+def build_cv_evidence_text(extracted_data: dict) -> str:
+    evidence = {
+        key: extracted_data.get(key)
+        for key in CV_EVIDENCE_KEYS
+        if extracted_data.get(key)
+    }
+    evidence_text = flatten_text(evidence).strip()
+    if not evidence_text and extracted_data.get("raw_cv_text"):
+        return str(extracted_data.get("raw_cv_text") or "")
+    return evidence_text
+
+
 def clamp_score(score: float, lower: float = 0.0, upper: float = 100.0) -> float:
     return round(max(lower, min(upper, score)), 2)
 
@@ -229,7 +260,7 @@ def extract_llm_match_score(extracted_data: dict) -> float | None:
             continue
         try:
             score = clamp_score(float(value))
-            return score if score > 0 else None
+            return score
         except (TypeError, ValueError):
             continue
     return None
@@ -249,6 +280,23 @@ def split_requirement_items(requirements_text: str) -> list[str]:
 
 def has_any(haystack: str, needles: list[str]) -> bool:
     return any(normalize_text(needle) in haystack for needle in needles)
+
+
+def has_exact_keyword(haystack: str, keyword: str) -> bool:
+    h = normalize_text(haystack)
+    k = normalize_text(keyword)
+    if not k:
+        return False
+
+    if re.fullmatch(r"[a-z0-9+#.]+", k):
+        pattern = rf"(?<![a-z0-9+#.]){re.escape(k)}(?![a-z0-9+#.])"
+        return re.search(pattern, h) is not None
+
+    return k in h
+
+
+def has_any_exact(haystack: str, needles: list[str]) -> bool:
+    return any(has_exact_keyword(haystack, needle) for needle in needles)
 
 
 def keyword_score(haystack: str, keywords: list[str]) -> float:
@@ -292,6 +340,8 @@ def get_itss_family_from_text(*values: Any) -> str:
         return "IT_SERVICE_MANAGEMENT"
     if has_any(text, ["network", "infrastructure", "cloud", "devops", "security engineer"]):
         return "NETWORK_INFRA"
+    if has_any(text, ["data engineer", "ai engineer", "machine learning", "data scientist", "data analyst", "ml engineer"]):
+        return "GENERAL_IT"
     return "GENERAL_IT"
 
 
@@ -313,7 +363,11 @@ def get_job_family(job_obj: JobDescription | None) -> str:
 def infer_candidate_family(candidate_itss_category: str, cv_haystack: str) -> str:
     predicted_family = get_itss_family_from_text(candidate_itss_category)
     if predicted_family != "GENERAL_IT":
-        return predicted_family
+        rubric = ITSS_RUBRICS.get(predicted_family, ITSS_RUBRICS["GENERAL_IT"])
+        role_hit = has_any(cv_haystack, rubric["direct_roles"])
+        core_score = keyword_score(cv_haystack, rubric["core_keywords"])
+        if role_hit or core_score >= 0.15:
+            return predicted_family
 
     best_family = "GENERAL_IT"
     best_score = 0.0
@@ -327,6 +381,57 @@ def infer_candidate_family(candidate_itss_category: str, cv_haystack: str) -> st
             best_score = score
 
     return best_family if best_score >= 0.20 else "GENERAL_IT"
+
+
+TECHNICAL_CORE_GROUPS = {
+    "BUSINESS_APP_DEV": [
+        ["python", "java", "javascript", "typescript", "c#", "php", "node.js", "nodejs"],
+        ["api", "rest api", "endpoint", "request", "response", "json"],
+        ["sql", "mysql", "postgresql", "database", "oracle", "sql server"],
+        ["spring boot", "fastapi", "django", "express", "laravel", "asp.net"],
+        ["git", "github", "gitlab"],
+    ],
+    "SYSTEM_DEV": [
+        ["java", "python", "c++", "c#", "embedded"],
+        ["linux", "os", "device", "sensor"],
+        ["iot", "mqtt", "industrial", "smart factory"],
+        ["api", "backend", "postgresql", "database"],
+    ],
+    "NETWORK_INFRA": [
+        ["linux", "windows server", "server", "ssh", "command line", "shell"],
+        ["network", "ip address", "subnet", "dns", "firewall", "routing", "tcp/ip"],
+        ["aws", "azure", "gcp", "cloud"],
+        ["docker", "kubernetes", "container"],
+        ["monitoring", "log", "cloudwatch", "prometheus", "grafana"],
+    ],
+    "IT_SERVICE_MANAGEMENT": [
+        ["it support", "helpdesk", "service desk", "user support"],
+        ["windows", "microsoft office", "outlook", "printer", "remote desktop"],
+        ["troubleshooting", "incident", "ticket", "ticketing"],
+        ["network", "lan", "wi-fi", "ip address"],
+    ],
+    "PROJECT_MANAGEMENT": [
+        ["project management", "planning", "schedule", "roadmap"],
+        ["risk", "stakeholder", "resource", "quality"],
+        ["scrum", "agile", "team leader", "project leader"],
+        ["report", "documentation", "meeting", "coordination"],
+    ],
+    "IT_STRATEGY": [
+        ["business analysis", "requirement", "stakeholder", "workflow"],
+        ["strategy", "roadmap", "consulting", "solution"],
+        ["architecture", "enterprise architecture", "system design"],
+        ["documentation", "proposal", "presentation"],
+    ],
+}
+
+
+def calculate_technical_core_score(job_family: str, cv_haystack: str) -> float:
+    groups = TECHNICAL_CORE_GROUPS.get(job_family, [])
+    if not groups:
+        return 50.0
+
+    matched = sum(1 for group in groups if has_any(cv_haystack, group))
+    return clamp_score((matched / len(groups)) * 100)
 
 
 def get_category_mismatch(job_family: str, candidate_family: str) -> str:
@@ -458,10 +563,278 @@ def calculate_confidence(
     }
 
 
+OPTIONAL_REQUIREMENT_MARKERS = [
+    "la loi the",
+    "uu tien",
+    "nice to have",
+    "preferred",
+    "plus",
+    "advantage",
+]
+
+ALTERNATIVE_REQUIREMENT_MARKERS = [
+    " hoac ",
+    " or ",
+    "/",
+]
+
+
+def is_optional_requirement(requirement: str) -> bool:
+    req = normalize_text(requirement)
+    return any(marker in req for marker in OPTIONAL_REQUIREMENT_MARKERS)
+
+
+def has_alternative_requirement(requirement: str) -> bool:
+    req = f" {normalize_text(requirement)} "
+    return any(marker in req for marker in ALTERNATIVE_REQUIREMENT_MARKERS)
+
+
+def score_known_alternative_requirement(req: str, cv_haystack: str) -> tuple[float, list[str], str] | None:
+    if has_any_exact(req, ["python", "java", "node", "nodejs", "node.js"]):
+        if (
+            has_any_exact(cv_haystack, ["python", "java", "node", "nodejs", "node.js"])
+            or has_any(cv_haystack, ["spring boot"])
+        ):
+            return (
+                95.0,
+                ["matched one alternative technology"],
+                "Ứng viên đã đáp ứng yêu cầu dạng lựa chọn bằng ít nhất một công nghệ phù hợp.",
+            )
+        return (
+            35.0,
+            [],
+            "Chưa tìm thấy bằng chứng rõ ràng cho các công nghệ thay thế được nêu trong JD.",
+        )
+
+    if has_any(req, ["aws", "azure", "gcp", "cloud"]):
+        if has_any(cv_haystack, ["aws certified cloud practitioner", "aws cloud practitioner"]):
+            return (
+                75.0,
+                ["cloud certification"],
+                "Ứng viên có chứng chỉ cloud, nhưng HR nên xác minh thêm kinh nghiệm áp dụng thực tế.",
+            )
+        if has_any(cv_haystack, ["aws", "azure", "gcp", "cloud"]):
+            return (
+                85.0,
+                ["cloud keyword"],
+                "Ứng viên có tín hiệu liên quan đến cloud platform.",
+            )
+        return (
+            55.0,
+            [],
+            "Chưa có bằng chứng rõ ràng về cloud platform, nhưng đây có thể chỉ là yêu cầu ưu tiên.",
+        )
+
+    return None
+
+
+def requirement_group_label(requirement: str) -> str:
+    req = normalize_text(requirement)
+    groups = [
+        ("Software / Backend Development", [
+            "backend development",
+            "backend service",
+            "phat trien backend",
+            "phat trien phan mem",
+            "software development",
+            "lap trinh",
+            "programming",
+        ]),
+        ("Programming Language", ["java", "python", "javascript", "typescript", "c#", "php", "node", "nodejs", "node.js"]),
+        ("REST API / Backend API", ["rest api", "api", "endpoint", "request", "response", "http method", "status code", "json"]),
+        ("Database / SQL", ["sql", "mysql", "postgresql", "sql server", "oracle", "database", "co so du lieu", "truy van"]),
+        ("Backend Framework", ["spring boot", "fastapi", "django", "express", "asp.net", "laravel"]),
+        ("Cross-functional Collaboration", [
+            "phoi hop voi frontend",
+            "frontend, qa",
+            "qa hoac infrastructure",
+            "infrastructure team",
+            "cross-functional",
+            "coordination",
+            "collaboration",
+        ]),
+        ("Frontend / UI", ["react", "vue", "frontend", "html", "css", "responsive", "ui", "form"]),
+        ("Git / Source Control", ["git", "github", "gitlab", "source code", "pull request", "branch", "code review"]),
+        ("Linux / Server OS", ["linux", "windows server", "server", "ssh", "shell", "command line"]),
+        ("Network", ["network", "ip address", "subnet", "dns", "firewall", "routing", "tcp/ip"]),
+        ("Cloud / Infrastructure", ["aws", "azure", "gcp", "cloud", "infrastructure"]),
+        ("Container / DevOps", ["docker", "kubernetes", "container", "ci/cd", "deployment", "staging", "production"]),
+        ("Monitoring / Operation", ["monitoring", "log", "logging", "cloudwatch", "prometheus", "grafana", "incident"]),
+        ("Security / Auth", ["authentication", "authorization", "jwt", "oauth", "security", "xss", "csrf", "cors"]),
+        ("Data Processing", ["machine learning", "data", "pandas", "numpy", "scikit", "model", "feature", "etl"]),
+        ("Japanese/JLPT", ["tieng nhat", "jlpt", "japanese", "n4", "n3"]),
+        ("English Technical Reading", ["tieng anh", "english", "technical document", "tai lieu ky thuat"]),
+        ("Documentation", ["documentation", "document", "tai lieu", "report", "bao cao"]),
+        ("Communication / Teamwork", ["communication", "teamwork", "giao tiep", "phoi hop", "team"]),
+        ("Learning Attitude", ["hoc hoi", "self-learning", "thai do", "entry-level", "junior"]),
+        ("Microsoft Office", ["microsoft office", "excel", "word", "powerpoint", "office"]),
+        ("User Support", ["ho tro nguoi dung", "support", "helpdesk", "service desk"]),
+    ]
+
+    for label, terms in groups:
+        if has_any(req, terms):
+            return label
+
+    return requirement[:80]
+
+
+def requirement_group_weight(label: str, optional: bool) -> float:
+    if optional:
+        return 0.35
+
+    weights = {
+        "Software / Backend Development": 1.3,
+        "Programming Language": 1.4,
+        "REST API / Backend API": 1.4,
+        "Database / SQL": 1.3,
+        "Backend Framework": 1.3,
+        "Cross-functional Collaboration": 0.6,
+        "Frontend / UI": 1.2,
+        "Git / Source Control": 1.0,
+        "Linux / Server OS": 1.3,
+        "Network": 1.3,
+        "Cloud / Infrastructure": 1.3,
+        "Container / DevOps": 1.1,
+        "Monitoring / Operation": 1.1,
+        "Security / Auth": 1.1,
+        "Data Processing": 1.2,
+        "Japanese/JLPT": 0.8,
+        "English Technical Reading": 0.7,
+        "Documentation": 0.5,
+        "Communication / Teamwork": 0.45,
+        "Learning Attitude": 0.35,
+        "Microsoft Office": 0.6,
+        "User Support": 1.0,
+    }
+    return weights.get(label, 1.0)
+
+
+def calculate_grouped_requirement_avg(requirement_scores: list[dict]) -> float:
+    grouped: dict[str, list[tuple[float, bool]]] = {}
+
+    for item in requirement_scores:
+        if not isinstance(item, dict):
+            continue
+
+        requirement = str(item.get("requirement") or "")
+        if not requirement:
+            continue
+
+        try:
+            score = float(item.get("score", 50))
+        except (TypeError, ValueError):
+            score = 50.0
+
+        label = str(item.get("requirement_group") or requirement_group_label(requirement))
+        optional = bool(item.get("optional")) or is_optional_requirement(requirement)
+        grouped.setdefault(label, []).append((score, optional))
+
+    if not grouped:
+        return 50.0
+
+    weighted_sum = 0.0
+    total_weight = 0.0
+
+    for label, values in grouped.items():
+        scores = [score for score, _ in values]
+        optional = all(opt for _, opt in values)
+        group_score = sum(scores) / len(scores)
+        weight = requirement_group_weight(label, optional)
+        weighted_sum += group_score * weight
+        total_weight += weight
+
+    return clamp_score(weighted_sum / total_weight if total_weight else 50.0)
+
+
 def score_requirement_item(requirement: str, cv_haystack: str) -> tuple[float, list[str], str]:
     req = normalize_text(requirement)
     evidence: list[str] = []
     note = "Scored from direct and semantic keyword evidence in extracted CV data."
+    optional_requirement = is_optional_requirement(requirement)
+    alternative_requirement = has_alternative_requirement(requirement)
+
+    if alternative_requirement:
+        alternative_score = score_known_alternative_requirement(req, cv_haystack)
+        if alternative_score is not None:
+            score, evidence, note = alternative_score
+            if optional_requirement and score < 60:
+                score = 60.0
+                note += " Đây là yêu cầu ưu tiên nên không bị xem là thiếu hụt nghiêm trọng."
+            return score, evidence, note
+
+    if has_any(req, ["phoi hop voi frontend", "frontend, qa", "qa hoac infrastructure", "infrastructure team", "cross-functional", "coordination", "collaboration"]):
+        matched = []
+        if has_any(cv_haystack, ["team", "teamwork", "collaboration", "coordination", "phoi hop", "lam viec nhom"]):
+            matched.append("collaboration")
+        if has_any(cv_haystack, ["frontend", "qa", "tester", "infrastructure", "devops", "product", "stakeholder"]):
+            matched.append("cross_functional_context")
+        if has_any(cv_haystack, ["meeting", "report", "documentation", "technical document", "handover"]):
+            matched.append("communication_workflow")
+
+        if len(matched) >= 2:
+            return 85.0, matched, "Ứng viên có tín hiệu phù hợp về phối hợp liên nhóm."
+        if len(matched) == 1:
+            return 65.0, matched, "Ứng viên có một phần bằng chứng về phối hợp hoặc giao tiếp trong nhóm."
+        return 45.0, matched, "Chưa tìm thấy bằng chứng rõ về phối hợp liên nhóm."
+
+    if has_any(req, ["backend service", "backend", "phat trien backend", "rest api", "api"]):
+        matched = []
+        if has_any(cv_haystack, ["backend", "backend service", "software engineer"]):
+            matched.append("backend")
+        if has_any(cv_haystack, ["rest api", "api"]):
+            matched.append("rest_api")
+        if has_any(cv_haystack, ["spring boot", "fastapi", "django", "express"]):
+            matched.append("backend_framework")
+        if has_any(cv_haystack, ["postgresql", "sql", "database"]):
+            matched.append("database")
+
+        if len(matched) >= 3:
+            return 95.0, matched, "Ứng viên có bằng chứng mạnh về backend/API/database."
+        if len(matched) == 2:
+            return 80.0, matched, "Ứng viên có nền tảng backend phù hợp."
+        if len(matched) == 1:
+            return 55.0, matched, "Ứng viên có một phần tín hiệu backend."
+        return 25.0, matched, "Chưa tìm thấy bằng chứng backend rõ ràng."
+
+    if has_any(req, ["docker", "git", "github", "linux"]):
+        tool_groups = [
+            ("docker", ["docker", "container"]),
+            ("git", ["git", "github", "gitlab"]),
+            ("linux", ["linux", "server", "shell", "command line"]),
+        ]
+
+        matched = []
+        for label, terms in tool_groups:
+            if has_any(cv_haystack, terms):
+                matched.append(label)
+
+        if len(matched) >= 3:
+            return 100.0, matched, "Ứng viên đáp ứng đầy đủ nhóm Docker/Git/Linux."
+        if len(matched) == 2:
+            return 80.0, matched, "Ứng viên đáp ứng phần lớn nhóm Docker/Git/Linux."
+        if len(matched) == 1:
+            return 55.0, matched, "Ứng viên chỉ có một phần bằng chứng cho nhóm Docker/Git/Linux."
+        return 25.0, matched, "Chưa tìm thấy bằng chứng rõ cho Docker/Git/Linux."
+
+    if has_any(req, ["mqtt", "iot gateway", "industrial iot", "sensor"]):
+        matched = []
+
+        if has_any(cv_haystack, ["mqtt", "mqtt broker"]):
+            matched.append("mqtt")
+        if has_any(cv_haystack, ["industrial iot", "iot cong nghiep"]):
+            matched.append("industrial_iot")
+        if has_any(cv_haystack, ["sensor", "cam bien", "sensor data"]):
+            matched.append("sensor_data")
+        if has_any(cv_haystack, ["iot gateway", "gateway"]):
+            matched.append("iot_gateway")
+
+        if len(matched) >= 3:
+            return 90.0, matched, "Ứng viên có bằng chứng mạnh về MQTT/Industrial IoT/Sensor Data."
+        if len(matched) == 2:
+            return 75.0, matched, "Ứng viên có nền tảng phù hợp, HR có thể xác minh thêm IoT Gateway nếu cần."
+        if len(matched) == 1:
+            return 60.0, matched, "Ứng viên có một phần tín hiệu liên quan đến IoT."
+        return 40.0, matched, "Chưa tìm thấy bằng chứng rõ về MQTT/Industrial IoT."
 
     if has_any(req, ["tieng nhat", "jlpt", "n4"]):
         if has_any(cv_haystack, ["jlpt n1", "n1", "jlpt n2", "n2", "jlpt n3", "n3", "jlpt n4", "n4"]):
@@ -493,9 +866,10 @@ def score_requirement_item(requirement: str, cv_haystack: str) -> tuple[float, l
     if has_any(req, ["may tinh", "mang", "windows", "linux", "he dieu hanh"]):
         partials = [
             ("linux", ["linux"]),
-            ("windows", ["windows"]),
-            ("network", ["network", "mang", "mqtt", "api", "distributed system", "he thong phan tan"]),
-            ("system", ["system", "he thong", "backend", "docker", "aws"]),
+            ("windows_server", ["windows server"]),
+            ("server", ["server", "ssh", "command line", "shell"]),
+            ("network", ["network", "mang", "ip address", "subnet", "dns", "firewall", "routing", "tcp/ip"]),
+            ("cloud_infra", ["aws", "azure", "gcp", "cloud infrastructure"]),
         ]
         matched = []
         for label, terms in partials:
@@ -590,18 +964,7 @@ def gap_matches_jd_requirement(gap_text: str, requirement_items: list[str], jd_t
 
 
 def requirement_gap_label(requirement: str) -> str:
-    req_norm = normalize_text(requirement)
-    labels = [
-        ("Japanese/JLPT", ["tieng nhat", "jlpt", "japanese"]),
-        ("English", ["tieng anh", "english", "toeic", "ielts"]),
-        ("Microsoft Office", ["microsoft office", "excel", "word", "powerpoint", "office"]),
-        ("User support", ["ho tro nguoi dung", "support", "helpdesk", "service desk"]),
-        ("Network/OS", ["mang", "network", "windows", "linux", "he dieu hanh"]),
-    ]
-    for label, terms in labels:
-        if has_any(req_norm, terms):
-            return label
-    return requirement[:80]
+    return requirement_group_label(requirement)
 
 
 def sanitize_ai_report_gaps(extracted_data: dict, requirement_scores: list[dict], jd_text: str) -> None:
@@ -619,10 +982,47 @@ def sanitize_ai_report_gaps(extracted_data: dict, requirement_scores: list[dict]
     for gap in ai_report.get("gaps") or []:
         skill = gap_skill_text(gap)
         if gap_matches_jd_requirement(skill, requirement_items, jd_text):
+            if isinstance(gap, dict) and not gap.get("severity"):
+                gap = {**gap, "severity": "gap"}
             filtered_gaps.append(gap)
 
-    existing_gap_keys = {normalize_text(gap_skill_text(gap)) for gap in filtered_gaps}
-    for item in requirement_scores:
+    normalized_existing_gaps = []
+    existing_gap_keys = set()
+    for gap in filtered_gaps:
+        skill = gap_skill_text(gap)
+        label = requirement_group_label(skill)
+        label_key = normalize_text(label)
+        if label_key in existing_gap_keys:
+            continue
+
+        if isinstance(gap, dict):
+            normalized_existing_gaps.append({**gap, "skill": label})
+        else:
+            normalized_existing_gaps.append({"skill": label, "severity": "gap"})
+        existing_gap_keys.add(label_key)
+
+    filtered_gaps = normalized_existing_gaps[:MAX_TOTAL_GAPS]
+    generated_attention_count = 0
+    generated_gap_count = sum(
+        1
+        for gap in filtered_gaps
+        if isinstance(gap, dict) and gap.get("severity") == "gap"
+    )
+
+    def requirement_score_value(item: dict) -> float:
+        try:
+            return float(item.get("score", 100))
+        except (TypeError, ValueError):
+            return 100.0
+
+    sorted_requirement_scores = sorted(
+        (item for item in requirement_scores if isinstance(item, dict)),
+        key=requirement_score_value,
+    )
+
+    for item in sorted_requirement_scores:
+        if len(filtered_gaps) >= MAX_TOTAL_GAPS:
+            break
         if not isinstance(item, dict):
             continue
         requirement = str(item.get("requirement", "")).strip()
@@ -632,18 +1032,40 @@ def sanitize_ai_report_gaps(extracted_data: dict, requirement_scores: list[dict]
             score = float(item.get("score", 100))
         except (TypeError, ValueError):
             score = 100.0
-        if score >= 60:
+        if score >= 80:
             continue
 
         label = requirement_gap_label(requirement)
         label_key = normalize_text(label)
         if label_key in existing_gap_keys:
             continue
+
+        optional_requirement = is_optional_requirement(requirement)
+
+        if score < 60 and not optional_requirement:
+            if generated_gap_count >= MAX_CRITICAL_GAPS:
+                continue
+            severity = "gap"
+            actual = 2 if score >= 35 else 1
+            generated_gap_count += 1
+            note = f"Thiếu hoặc chưa thể hiện rõ nhóm yêu cầu bắt buộc trong JD: {requirement}"
+        else:
+            if generated_attention_count >= MAX_ATTENTION_POINTS:
+                continue
+            severity = "attention"
+            actual = 3
+            if optional_requirement:
+                note = f"Đây là yêu cầu ưu tiên/lợi thế trong JD, HR nên xác minh thêm nếu vai trò cần dùng thường xuyên: {requirement}"
+            else:
+                note = f"Ứng viên có tín hiệu phù hợp nhưng HR nên xác minh thêm yêu cầu JD này: {requirement}"
+            generated_attention_count += 1
+
         filtered_gaps.append({
             "skill": label,
             "required": 4,
-            "actual": 2 if score >= 35 else 1,
-            "note": f"Gap này được sinh từ yêu cầu JD: {requirement}",
+            "actual": actual,
+            "severity": severity,
+            "note": note,
         })
         existing_gap_keys.add(label_key)
 
@@ -681,7 +1103,7 @@ def calculate_hybrid_match_score(
     ai_status: str = "processed",
     report_source: str = "gemini",
 ) -> dict:
-    cv_haystack = normalize_text(flatten_text(extracted_data))
+    cv_haystack = normalize_text(build_cv_evidence_text(extracted_data))
     requirements_text = job_obj.requirements_text if job_obj else jd_text
     requirement_items = split_requirement_items(requirements_text or jd_text)
 
@@ -690,23 +1112,28 @@ def calculate_hybrid_match_score(
         score, evidence, note = score_requirement_item(item, cv_haystack)
         requirement_scores.append({
             "requirement": item,
+            "requirement_group": requirement_group_label(item),
+            "optional": is_optional_requirement(item),
             "score": score,
             "evidence": evidence,
             "note": note,
         })
 
-    if requirement_scores:
-        requirement_avg = sum(item["score"] for item in requirement_scores) / len(requirement_scores)
-    else:
-        requirement_avg = 50.0
+    requirement_avg = calculate_grouped_requirement_avg(requirement_scores)
 
     role_alignment_score, role_alignment_reason, role_mismatch_level = score_role_alignment(job_obj, cv_haystack)
     candidate_itss = extracted_data.get("itss_prediction") or {}
     candidate_itss_category = candidate_itss.get("category") if isinstance(candidate_itss, dict) else ""
     candidate_itss_level = candidate_itss.get("level") if isinstance(candidate_itss, dict) else None
     job_family = get_job_family(job_obj)
+    technical_core_score = calculate_technical_core_score(job_family, cv_haystack)
     candidate_family = infer_candidate_family(candidate_itss_category, cv_haystack)
     itss_category_mismatch_level = get_category_mismatch(job_family, candidate_family)
+    if candidate_family == "GENERAL_IT" and job_family in TECHNICAL_JOB_FAMILIES:
+        if technical_core_score <= 25:
+            itss_category_mismatch_level = "HIGH"
+        elif technical_core_score <= 50:
+            itss_category_mismatch_level = "MEDIUM"
     level_fit_score = calculate_level_fit(candidate_itss_level, job_obj.itss_level if job_obj else None)
     category_score = category_fit_score(itss_category_mismatch_level)
     role_mismatch_level = resolve_role_mismatch_level(
@@ -724,10 +1151,10 @@ def calculate_hybrid_match_score(
 
     weighted_parts = []
     if llm_score is not None:
-        weighted_parts.append(("rubric", rubric_score, 0.55))
-        weighted_parts.append(("llm", llm_score, 0.30))
+        weighted_parts.append(("rubric", rubric_score, 0.60))
+        weighted_parts.append(("llm", llm_score, 0.35))
         if embedding_score is not None:
-            weighted_parts.append(("embedding", embedding_score, 0.15))
+            weighted_parts.append(("embedding", embedding_score, 0.05))
     else:
         weighted_parts.append(("rubric", rubric_score, 0.80))
         if embedding_score is not None:
@@ -735,6 +1162,30 @@ def calculate_hybrid_match_score(
 
     total_weight = sum(weight for _, _, weight in weighted_parts)
     final_score = sum(score * weight for _, score, weight in weighted_parts) / total_weight if total_weight else rubric_score
+
+    is_clear_negative_case = (
+        job_family in TECHNICAL_JOB_FAMILIES
+        and technical_core_score <= 25
+        and llm_score is not None
+        and llm_score <= 20
+        and embedding_score is not None
+        and embedding_score <= 20
+    )
+    is_weak_technical_fit = (
+        job_family in TECHNICAL_JOB_FAMILIES
+        and technical_core_score <= 40
+        and llm_score is not None
+        and llm_score <= 45
+        and embedding_score is not None
+        and embedding_score <= 35
+    )
+
+    if is_clear_negative_case:
+        role_mismatch_level = stronger_mismatch_level(role_mismatch_level, "HIGH")
+        final_score = min(final_score, 30.0)
+    elif is_weak_technical_fit:
+        role_mismatch_level = stronger_mismatch_level(role_mismatch_level, "MEDIUM")
+        final_score = min(final_score, 55.0)
 
     if role_mismatch_level == "HIGH":
         final_score = min(final_score, 45.0)
@@ -760,7 +1211,11 @@ def calculate_hybrid_match_score(
         requirement_count=len(requirement_scores),
     )
 
-    scoring_method = "hybrid_llm_rubric_embedding_v1" if llm_score is not None else "hybrid_rubric_embedding_v1"
+    scoring_method = (
+        "hybrid_llm_grouped_rubric_embedding_v3"
+        if llm_score is not None
+        else "hybrid_grouped_rubric_embedding_v3"
+    )
     return {
         "embedding_match_score": embedding_score,
         "llm_match_score": llm_score,
@@ -774,6 +1229,9 @@ def calculate_hybrid_match_score(
         "itss_category_mismatch_level": itss_category_mismatch_level,
         "job_family": job_family,
         "candidate_family": candidate_family,
+        "technical_core_score": technical_core_score,
+        "is_clear_negative_case": is_clear_negative_case,
+        "is_weak_technical_fit": is_weak_technical_fit,
         "level_fit_score": level_fit_score,
         "category_fit_score": category_score,
         "score_label": score_label,
@@ -826,6 +1284,9 @@ def build_evaluation_result(
         "itss_category_mismatch_level": hybrid_result.get("itss_category_mismatch_level"),
         "job_family": hybrid_result.get("job_family"),
         "candidate_family": hybrid_result.get("candidate_family"),
+        "technical_core_score": hybrid_result.get("technical_core_score"),
+        "is_clear_negative_case": hybrid_result.get("is_clear_negative_case"),
+        "is_weak_technical_fit": hybrid_result.get("is_weak_technical_fit"),
         "level_fit_score": hybrid_result.get("level_fit_score"),
         "category_fit_score": hybrid_result.get("category_fit_score"),
         "score_label": hybrid_result.get("score_label"),
@@ -849,6 +1310,42 @@ def build_evaluation_result(
         "embedding_model": "all-MiniLM-L6-v2",
         "llm_model": "gemini-2.5-flash",
     }
+
+
+def build_pipeline_comparison(baseline_result: dict, optimized_result: dict) -> dict:
+    baseline_score = baseline_result.get("match_score")
+    optimized_score = optimized_result.get("final_match_score")
+
+    score_delta = None
+    if baseline_score is not None and optimized_score is not None:
+        try:
+            score_delta = round(float(optimized_score) - float(baseline_score), 2)
+        except (TypeError, ValueError):
+            score_delta = None
+
+    return {
+        "baseline_score": baseline_score,
+        "optimized_score": optimized_score,
+        "score_delta": score_delta,
+        "baseline_method": baseline_result.get("scoring_method", "llm_direct_only"),
+        "optimized_method": optimized_result.get("scoring_method"),
+        "main_difference": (
+            "Baseline dùng LLM để đánh giá trực tiếp. "
+            "Optimized kết hợp rubric, embedding, ITSS mapping, gap filtering và confidence."
+        ),
+    }
+
+
+def build_skipped_baseline_result() -> dict:
+    skipped_result = {
+        "pipeline_name": "baseline_llm_direct",
+        "pipeline_version": BASELINE_PIPELINE_VERSION,
+        "scoring_method": "llm_direct_only",
+        "status": "skipped",
+        "match_score": None,
+        "warning": "Baseline pipeline was skipped to save Gemini quota.",
+    }
+    return skipped_result
 
 
 async def async_process_cv_pipeline(application_id: str, file_url: str):
@@ -954,23 +1451,27 @@ async def async_process_cv_pipeline(application_id: str, file_url: str):
         print(f"[Pipeline] Gemini failed; kept previous processed Gemini report for application {application_id}\n")
         return
 
-    skills = normalize_skills(extracted_data)
-    skills_text = ", ".join(skills) if skills else cv_text[:1000]
+    cv_embedding_text = build_cv_evidence_text(extracted_data) or cv_text[:2000]
+    jd_embedding_text = "\n".join([
+        job_obj.title or "",
+        job_obj.description_text or "",
+        job_obj.requirements_text or "",
+    ])
 
     embedding_score = None
-    if job_obj and job_obj.requirements_text:
+    if job_obj and jd_embedding_text.strip():
         try:
-            embedding_score = baseline_match_cv_with_jd(skills_text, job_obj.requirements_text)
+            embedding_score = baseline_match_cv_with_jd(cv_embedding_text, jd_embedding_text)
             print(f"[Matching] embedding_match_score={embedding_score}%")
         except Exception as exc:
             print(f"[Matching Error] Cannot calculate embedding score: {exc}")
 
     if cv_collection is not None:
         try:
-            cv_vector = get_text_embedding(skills_text)
+            cv_vector = get_text_embedding(cv_embedding_text)
             cv_collection.upsert(
                 embeddings=[cv_vector],
-                documents=[skills_text],
+                documents=[cv_embedding_text],
                 metadatas=[{
                     "application_id": str(application_id),
                     "full_name": extracted_data.get("personal_info", {}).get("full_name", "Unknown") if gemini_ok else "Unknown",
@@ -1016,7 +1517,7 @@ async def async_process_cv_pipeline(application_id: str, file_url: str):
         job_obj.requirements_text or jd_text,
     )
 
-    evaluation_result = build_evaluation_result(
+    optimized_result = build_evaluation_result(
         extracted_data=extracted_data or {},
         jd_text=jd_text,
         embedding_score=embedding_score,
@@ -1024,6 +1525,29 @@ async def async_process_cv_pipeline(application_id: str, file_url: str):
         ai_status=ai_status,
         report_source=report_source,
     )
+    if settings.RUN_BASELINE_PIPELINE:
+        baseline_result = await evaluate_baseline_cv_jd(cv_text, jd_text)
+    else:
+        baseline_result = build_skipped_baseline_result()
+
+    print(
+        "[Baseline] "
+        f"status={baseline_result.get('status')}, "
+        f"match_score={baseline_result.get('match_score')}, "
+        f"error={baseline_result.get('error', '') or baseline_result.get('latest_error', '')}, "
+        f"run_enabled={settings.RUN_BASELINE_PIPELINE}"
+    )
+
+    comparison_result = build_pipeline_comparison(
+        baseline_result=baseline_result,
+        optimized_result=optimized_result,
+    )
+    evaluation_result = {
+        **optimized_result,
+        "baseline_pipeline": baseline_result,
+        "optimized_pipeline": optimized_result,
+        "pipeline_comparison": comparison_result,
+    }
 
     await update_application_ai_fields(
         application_id,

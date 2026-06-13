@@ -27,6 +27,7 @@ class Settings(BaseSettings):
 
     # GEMINI API
     GEMINI_API_KEY: str
+    RUN_BASELINE_PIPELINE: bool
 
     # Redis
     REDIS_URL: str

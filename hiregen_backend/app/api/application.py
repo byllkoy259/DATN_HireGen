@@ -452,6 +452,9 @@ async def get_application_ai_report(
             if evaluation_result.get(key) is None
         },
     }
+    baseline_pipeline = evaluation_result.get("baseline_pipeline") or {}
+    optimized_pipeline = evaluation_result.get("optimized_pipeline") or {}
+    pipeline_comparison = evaluation_result.get("pipeline_comparison") or {}
 
     return {
         "application_id": app_id_str,
@@ -469,6 +472,9 @@ async def get_application_ai_report(
         "final_match_score": final_match_score,
         "scoring_method": application.scoring_method or evaluation_result.get("scoring_method") or "embedding_cosine_v1",
         "evaluation_result": evaluation_result,
+        "baseline_pipeline": baseline_pipeline,
+        "optimized_pipeline": optimized_pipeline,
+        "pipeline_comparison": pipeline_comparison,
 
         "confidence_score": confidence_result.get("confidence_score"),
         "confidence_level": confidence_result.get("confidence_level"),

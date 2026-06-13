@@ -3,9 +3,67 @@ import { useParams } from 'react-router-dom';
 import styles from './PublicProfile.module.css';
 import axiosClient from '../../services/axiosClient';
 
+interface PublicUser {
+    email?: string;
+}
+
+interface EducationItem {
+    school_name?: string;
+    major?: string;
+    end_date?: string;
+    description?: string;
+}
+
+interface WorkExperienceItem {
+    company_name?: string;
+    position?: string;
+    period?: string;
+    duration?: string;
+    start_date?: string;
+    end_date?: string;
+    technologies?: string | string[];
+    skills?: string | string[];
+    description?: string;
+}
+
+interface ProjectItem {
+    project_name?: string;
+    role?: string;
+    period?: string;
+    duration?: string;
+    start_date?: string;
+    end_date?: string;
+    technologies?: string | string[];
+    skills?: string | string[];
+    description?: string;
+}
+
+interface CertificationItem {
+    name?: string;
+    issuer?: string;
+    year?: string;
+}
+
+interface PublicCandidateProfile {
+    full_name?: string;
+    address?: string;
+    user?: PublicUser;
+    phone?: string;
+    linkedin_url?: string;
+    github_url?: string;
+    portfolio_url?: string;
+    about_me?: string;
+    education?: EducationItem[];
+    work_experience?: WorkExperienceItem[];
+    projects?: ProjectItem[];
+    tech_skills?: string[];
+    soft_skills?: string[];
+    certifications?: CertificationItem[];
+}
+
 const PublicProfile: React.FC = () => {
     const { id } = useParams<{ id: string }>();
-    const [profile, setProfile] = useState<any>(null);
+    const [profile, setProfile] = useState<PublicCandidateProfile | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -58,7 +116,7 @@ const PublicProfile: React.FC = () => {
         return url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
     };
 
-    const getPeriodText = (item: any) => {
+    const getPeriodText = (item: WorkExperienceItem | ProjectItem) => {
         if (item?.period) return item.period;
         if (item?.duration) return item.duration;
         if (item?.start_date && item?.end_date) return `${item.start_date} - ${item.end_date}`;
@@ -74,6 +132,13 @@ const PublicProfile: React.FC = () => {
         .split(',')
         .map(item => item.trim())
         .filter(Boolean);
+
+    const education = profile.education ?? [];
+    const workExperience = profile.work_experience ?? [];
+    const projects = profile.projects ?? [];
+    const techSkills = profile.tech_skills ?? [];
+    const softSkills = profile.soft_skills ?? [];
+    const certifications = profile.certifications ?? [];
 
     return (
         <div className={styles.page}>
@@ -110,11 +175,19 @@ const PublicProfile: React.FC = () => {
                     </div>
                 </header>
 
+                {/* PROFILE */}
+                {profile.about_me?.trim() && (
+                    <section className={styles.section}>
+                        <h2 className={styles.sectionTitle}>PROFILE</h2>
+                        <p className={styles.profileSummary}>{profile.about_me}</p>
+                    </section>
+                )}
+
                 {/* EDUCATION */}
-                {profile.education?.length > 0 && (
+                {education.length > 0 && (
                     <section className={styles.section}>
                         <h2 className={styles.sectionTitle}>EDUCATION</h2>
-                        {profile.education.map((edu: any, idx: number) => (
+                        {education.map((edu: EducationItem, idx: number) => (
                             <div key={idx} className={styles.itemBlock}>
                                 <div className={styles.row}>
                                     {/* Dùng school_name và end_date */}
@@ -137,10 +210,10 @@ const PublicProfile: React.FC = () => {
                 )}
 
                 {/* WORK EXPERIENCE */}
-                {profile.work_experience?.length > 0 && (
+                {workExperience.length > 0 && (
                     <section className={styles.section}>
                         <h2 className={styles.sectionTitle}>EXPERIENCE</h2>
-                        {profile.work_experience.map((exp: any, idx: number) => (
+                        {workExperience.map((exp: WorkExperienceItem, idx: number) => (
                             <div key={idx} className={styles.itemBlock}>
                                 <div className={styles.row}>
                                     {/* Dùng company_name và end_date */}
@@ -167,10 +240,10 @@ const PublicProfile: React.FC = () => {
                 )}
 
                 {/* PROJECTS */}
-                {profile.projects?.length > 0 && (
+                {projects.length > 0 && (
                     <section className={styles.section}>
                         <h2 className={styles.sectionTitle}>PROJECTS</h2>
-                        {profile.projects.map((proj: any, idx: number) => (
+                        {projects.map((proj: ProjectItem, idx: number) => (
                             <div key={idx} className={styles.itemBlock}>
                                 <div className={styles.row}>
                                     {/* Dùng project_name */}
@@ -196,18 +269,18 @@ const PublicProfile: React.FC = () => {
                 )}
 
                 {/* SKILLS */}
-                {(profile.tech_skills?.length > 0 || profile.soft_skills?.length > 0) && (
+                {(techSkills.length > 0 || softSkills.length > 0) && (
                     <section className={styles.section}>
                         <h2 className={styles.sectionTitle}>SKILLS</h2>
                         <div className={styles.itemBlock}>
-                            {profile.tech_skills?.length > 0 && (
+                            {techSkills.length > 0 && (
                                 <div className={styles.skillLine}>
-                                    <strong>Technical Skills:</strong> {profile.tech_skills.join(', ')}
+                                    <strong>Technical Skills:</strong> {techSkills.join(', ')}
                                 </div>
                             )}
-                            {profile.soft_skills?.length > 0 && (
+                            {softSkills.length > 0 && (
                                 <div className={styles.skillLine}>
-                                    <strong>Soft Skills:</strong> {profile.soft_skills.join(', ')}
+                                    <strong>Soft Skills:</strong> {softSkills.join(', ')}
                                 </div>
                             )}
                         </div>
@@ -215,10 +288,10 @@ const PublicProfile: React.FC = () => {
                 )}
 
                 {/* CERTIFICATIONS */}
-                {profile.certifications?.length > 0 && (
+                {certifications.length > 0 && (
                     <section className={styles.section}>
                         <h2 className={styles.sectionTitle}>CERTIFICATIONS</h2>
-                        {profile.certifications.map((cert: any, idx: number) => (
+                        {certifications.map((cert: CertificationItem, idx: number) => (
                             <div key={idx} className={styles.itemBlock}>
                                 <div className={styles.row}>
                                     <div>

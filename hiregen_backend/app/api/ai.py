@@ -20,6 +20,24 @@ router = APIRouter(
     tags=["AI Integration - Baseline"]
 )
 
+
+def reset_application_ai_fields(application: Application) -> None:
+    application.match_score = None
+    application.embedding_match_score = None
+    application.llm_match_score = None
+    application.final_match_score = None
+    application.scoring_method = None
+    application.extracted_data = None
+    application.evaluation_result = None
+    application.report_source = "none"
+    application.ai_processed_at = None
+    application.ai_status = "queued"
+    application.ai_error = None
+    application.last_ai_error = None
+    application.last_ai_rerun_at = datetime.utcnow()
+    application.last_ai_attempt_status = "queued"
+
+
 @router.post("/test-extract", response_model=AIExtractResponse)
 async def test_extract_cv(request: CVExtractRequest):
     """
@@ -48,7 +66,7 @@ async def test_match_cv_jd(request: AIMatchRequest):
         raise HTTPException(status_code=400, detail="CV và JD không được để trống")
 
     try:
-        # Gọi hàm xử lý logic Baseline
+        # Endpoint test riêng cho embedding cosine similarity, không phải baseline chính thức.
         match_score = baseline_match_cv_with_jd(request.cv_text, request.jd_text)
         
         return {
@@ -92,6 +110,7 @@ async def run_ai_matching_for_job(
     queued = 0
     skipped = 0
     missing_resume = 0
+    pending_tasks: list[tuple[str, str]] = []
 
     for application in applications:
         has_ai_result = application.ai_status == "processed" or (
@@ -105,15 +124,14 @@ async def run_ai_matching_for_job(
             missing_resume += 1
             continue
 
-        application.ai_status = "queued"
-        application.ai_error = None
-        application.last_ai_error = None
-        application.last_ai_rerun_at = datetime.utcnow()
-        application.last_ai_attempt_status = "queued"
-        process_candidate_cv_task.delay(str(application.id), application.resume.cv_url)
+        reset_application_ai_fields(application)
+        pending_tasks.append((str(application.id), application.resume.cv_url))
         queued += 1
 
     await db.commit()
+
+    for application_id, cv_url in pending_tasks:
+        process_candidate_cv_task.delay(application_id, cv_url)
 
     return {
         "status": "queued" if queued > 0 else "no_pending_applications",
@@ -155,11 +173,7 @@ async def rerun_ai_matching_for_application(
     if not application.resume or not application.resume.cv_url:
         raise HTTPException(status_code=400, detail="Application has no resume URL to process.")
 
-    application.ai_status = "queued"
-    application.ai_error = None
-    application.last_ai_error = None
-    application.last_ai_rerun_at = datetime.utcnow()
-    application.last_ai_attempt_status = "queued"
+    reset_application_ai_fields(application)
     await db.commit()
 
     process_candidate_cv_task.delay(str(application.id), application.resume.cv_url)

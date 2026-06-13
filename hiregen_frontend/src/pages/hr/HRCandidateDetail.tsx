@@ -40,6 +40,7 @@ interface GapItem {
     required: number;   // 0-5
     actual: number;     // 0-5
     note: string;
+    severity?: 'gap' | 'attention';
 }
 
 interface RadarPoint {
@@ -52,6 +53,43 @@ interface AIQuestion {
     category: string;
     question: string;
     intent: string;
+}
+
+interface BaselinePipeline {
+    match_score?: number | null;
+    summary?: string;
+    score_reason?: string;
+    matched_skills?: string[];
+    missing_skills?: string[];
+    strengths?: string[];
+    weaknesses?: string[];
+    interview_questions?: AIQuestion[];
+    recommendation?: string;
+    scoring_method?: string;
+    status?: string;
+    warning?: string;
+    score_warning?: string;
+    latest_error?: string;
+    error?: string;
+}
+
+interface OptimizedPipeline {
+    final_match_score?: number | null;
+    rubric_match_score?: number | null;
+    llm_match_score?: number | null;
+    embedding_match_score?: number | null;
+    confidence_score?: number | null;
+    confidence_level?: 'HIGH' | 'MEDIUM' | 'LOW';
+    scoring_method?: string;
+}
+
+interface PipelineComparison {
+    baseline_score?: number | null;
+    optimized_score?: number | null;
+    score_delta?: number | null;
+    baseline_method?: string;
+    optimized_method?: string;
+    main_difference?: string;
 }
 
 interface CandidateDetail {
@@ -85,6 +123,9 @@ interface CandidateDetail {
     radar_data: RadarPoint[];
     gaps: GapItem[];
     ai_questions: AIQuestion[];
+    baseline_pipeline?: BaselinePipeline;
+    optimized_pipeline?: OptimizedPipeline;
+    pipeline_comparison?: PipelineComparison;
 }
 
 // ĐÃ SỬA: Mapping đầy đủ các trạng thái để giao diện tra cứu an toàn
@@ -109,6 +150,7 @@ const normalizeStatus = (status?: string): AppStatus => {
 };
 
 const pct = (s: number) => Math.round(s);
+const fmtScore = (s?: number | null) => (typeof s === 'number' && Number.isFinite(s) ? `${Math.round(s * 100) / 100}%` : 'N/A');
 const matchColor = (s: number) => s >= 80 ? '#16a34a' : s >= 60 ? '#d97706' : '#dc2626';
 const confidenceLabel: Record<'HIGH' | 'MEDIUM' | 'LOW', string> = {
     HIGH: 'Độ tin cậy cao',
@@ -291,6 +333,42 @@ const HRCandidateDetail: React.FC = () => {
     const confidenceLevel = candidate.confidence_level;
     const confidenceText = confidenceLevel ? confidenceLabel[confidenceLevel] : '';
     const confidenceScore = typeof candidate.confidence_score === 'number' ? pct(candidate.confidence_score) : null;
+    const gapItems = candidate.gaps || [];
+    const hardGapCount = gapItems.filter(g => (g.severity || 'gap') === 'gap').length;
+    const attentionCount = gapItems.filter(g => g.severity === 'attention').length;
+    const baselineScore = typeof candidate.pipeline_comparison?.baseline_score === 'number'
+        ? candidate.pipeline_comparison.baseline_score
+        : candidate.baseline_pipeline?.match_score;
+    const optimizedScore = typeof candidate.pipeline_comparison?.optimized_score === 'number'
+        ? candidate.pipeline_comparison.optimized_score
+        : candidate.optimized_pipeline?.final_match_score ?? candidate.match_score;
+    const scoreDelta = typeof candidate.pipeline_comparison?.score_delta === 'number'
+        ? candidate.pipeline_comparison.score_delta
+        : typeof baselineScore === 'number' && typeof optimizedScore === 'number'
+            ? Math.round((optimizedScore - baselineScore) * 100) / 100
+            : null;
+    const hasPipelineComparison = Boolean(
+        typeof candidate.pipeline_comparison?.baseline_score === 'number'
+        || typeof candidate.baseline_pipeline?.match_score === 'number'
+        || ['failed', 'quota_exceeded', 'skipped'].includes(candidate.baseline_pipeline?.status || '')
+        || candidate.pipeline_comparison?.main_difference
+    );
+    const baselineStatus = candidate.baseline_pipeline?.status || '';
+    const baselineStatusLabel = baselineStatus === 'quota_exceeded'
+        ? 'Hết quota Baseline'
+        : baselineStatus === 'skipped'
+            ? 'Baseline tạm tắt'
+            : baselineStatus === 'failed'
+                ? 'Baseline lỗi'
+                : '';
+    const baselineStatusClass = baselineStatus === 'skipped'
+            ? styles.pipelineWarningMuted
+            : styles.pipelineWarning;
+    const deltaClass = typeof scoreDelta === 'number' && scoreDelta > 0
+        ? styles.deltaPositive
+        : typeof scoreDelta === 'number' && scoreDelta < 0
+            ? styles.deltaNegative
+            : styles.deltaNeutral;
     const aiNotice = candidate.ai_status === 'partial'
         ? 'Báo cáo tạm thời: Gemini/LLM chưa hoàn tất, hệ thống đang dùng fallback embedding + rubric.'
         : candidate.ai_status === 'retry_failed'
@@ -470,30 +548,108 @@ const HRCandidateDetail: React.FC = () => {
                         </div>
                     </div>
 
+                    {hasPipelineComparison && (
+                        <div className={`${styles.card} ${styles.pipelineCard}`}>
+                            <div className={styles.cardHeader}>
+                                <span className="material-symbols-outlined">compare_arrows</span>
+                                <span>So sánh Pipeline</span>
+                                {baselineStatusLabel && (
+                                    <span className={baselineStatusClass}>{baselineStatusLabel}</span>
+                                )}
+                            </div>
+                            <div className={styles.cardBody}>
+                                <div className={styles.pipelineMetrics}>
+                                    <div className={styles.pipelineMetric}>
+                                        <span className={styles.metricLabel}>Baseline</span>
+                                        <strong>{fmtScore(baselineScore)}</strong>
+                                        <span className={styles.metricMethod}>{candidate.pipeline_comparison?.baseline_method || candidate.baseline_pipeline?.scoring_method || 'llm_direct_only'}</span>
+                                    </div>
+                                    <div className={styles.pipelineMetric}>
+                                        <span className={styles.metricLabel}>Optimized</span>
+                                        <strong>{fmtScore(optimizedScore)}</strong>
+                                        <span className={styles.metricMethod}>{candidate.pipeline_comparison?.optimized_method || candidate.optimized_pipeline?.scoring_method || 'hybrid'}</span>
+                                    </div>
+                                    <div className={`${styles.pipelineMetric} ${deltaClass}`}>
+                                        <span className={styles.metricLabel}>Chênh lệch</span>
+                                        <strong>{typeof scoreDelta === 'number' ? `${scoreDelta > 0 ? '+' : ''}${fmtScore(scoreDelta)}` : 'N/A'}</strong>
+                                        <span className={styles.metricMethod}>Optimized - Baseline</span>
+                                    </div>
+                                </div>
+
+                                {(candidate.baseline_pipeline?.summary || candidate.baseline_pipeline?.warning || candidate.baseline_pipeline?.score_warning || candidate.pipeline_comparison?.main_difference) && (
+                                    <div className={styles.pipelineNotes}>
+                                        {candidate.baseline_pipeline?.summary && (
+                                            <p>
+                                                <span>Baseline:</span>
+                                                {candidate.baseline_pipeline.summary}
+                                            </p>
+                                        )}
+                                        {candidate.baseline_pipeline?.warning && (
+                                            <p>
+                                                <span>Trạng thái:</span>
+                                                {candidate.baseline_pipeline.warning}
+                                            </p>
+                                        )}
+                                        {candidate.baseline_pipeline?.score_warning && (
+                                            <p>
+                                                <span>Điểm số:</span>
+                                                {candidate.baseline_pipeline.score_warning}
+                                            </p>
+                                        )}
+                                        {candidate.pipeline_comparison?.main_difference && (
+                                            <p>
+                                                <span>Khác biệt:</span>
+                                                {candidate.pipeline_comparison.main_difference}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                     <div className={styles.row2}>
                         <div className={styles.card}>
                             <div className={styles.cardHeader}>
                                 <span className="material-symbols-outlined">difference</span>
-                                <span>Phân tích Lỗ hổng năng lực</span>
-                                <span className={styles.gapCount}>{candidate.gaps?.length || 0} kỹ năng cần chú ý</span>
+                                <span>Phân tích lỗ hổng năng lực</span>
+                                <span className={styles.gapCount}>
+                                    {gapItems.length > 0 ? `${hardGapCount} gap · ${attentionCount} cần xác minh` : '0 điểm cần chú ý'}
+                                </span>
                             </div>
                             <div className={styles.cardBody}>
-                                <div className={styles.gapList}>
-                                    {candidate.gaps?.map((g, i) => (
-                                        <div key={i} className={styles.gapItem}>
-                                            <div className={styles.gapTop}>
-                                                <span className={styles.gapSkill}>{g.skill}</span>
-                                                <div className={styles.gapLevels}>
-                                                    {[1,2,3,4,5].map(lv => (
-                                                        <span key={lv} className={`${styles.gapDot} ${lv <= g.actual ? styles.gapDotFilled : ''} ${lv > g.actual && lv <= g.required ? styles.gapDotMissing : ''}`} />
-                                                    ))}
-                                                    <span className={styles.gapDelta}>−{g.required - g.actual}</span>
+                                {gapItems.length > 0 ? (
+                                    <div className={styles.gapList}>
+                                        {gapItems.map((g, i) => {
+                                            const severity = g.severity || 'gap';
+                                            return (
+                                                <div key={i} className={`${styles.gapItem} ${severity === 'attention' ? styles.gapItemAttention : ''}`}>
+                                                    <div className={styles.gapTop}>
+                                                        <div className={styles.gapTitle}>
+                                                            <span className={styles.gapSkill}>{g.skill}</span>
+                                                            <span className={`${styles.gapSeverity} ${severity === 'attention' ? styles.gapSeverityAttention : styles.gapSeverityGap}`}>
+                                                                {severity === 'attention' ? 'Cần xác minh' : 'Gap'}
+                                                            </span>
+                                                        </div>
+                                                        <div className={styles.gapLevels}>
+                                                            {[1,2,3,4,5].map(lv => (
+                                                                <span key={lv} className={`${styles.gapDot} ${lv <= g.actual ? styles.gapDotFilled : ''} ${lv > g.actual && lv <= g.required ? styles.gapDotMissing : ''}`} />
+                                                            ))}
+                                                            <span className={styles.gapDelta}>−{Math.max(0, g.required - g.actual)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <p className={styles.gapNote}>{g.note}</p>
                                                 </div>
-                                            </div>
-                                            <p className={styles.gapNote}>{g.note}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className={styles.gapEmpty}>
+                                        <span className="material-symbols-outlined">task_alt</span>
+                                        <p>Không phát hiện lỗ hổng năng lực đáng kể so với JD.</p>
+                                        <span>HR có thể tập trung xác minh chiều sâu kinh nghiệm trong phỏng vấn.</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

@@ -14,7 +14,7 @@ interface PipelineRow {
     status: JobStatus;
 }
 
-type JobStatus = 'open' | 'active' | 'closed' | 'draft' | 'pending';
+type JobStatus = 'open' | 'active' | 'closed' | 'draft' | 'pending' | 'expired';
 type ApplicationBucket = 'pending' | 'reviewed' | 'hired' | 'rejected';
 type ActivityType = 'apply' | 'ai' | 'job' | 'interview';
 
@@ -66,16 +66,18 @@ interface StatCardProps {
     isHighlight?: boolean;
 }
 
-const STATUS_META = {
-    open:    { label: 'Đang mở', cls: 'badgeGreen' },
-    active:  { label: 'Đang mở', cls: 'badgeGreen' },
-    pending: { label: 'Chờ duyệt', cls: 'badgeAmber' },
-    draft:   { label: 'Nháp', cls: 'badgeGray' },
-    closed:  { label: 'Đã đóng', cls: 'badgeRed' },
-} as const;
+const STATUS_META: Record<string, { label: string; cls: string }> = {
+    open:    { label: 'Đang mở',   cls: 'badgeGreen'  },
+    active:  { label: 'Đang mở',   cls: 'badgeGreen'  },
+    pending: { label: 'Chờ duyệt', cls: 'badgeAmber'  },
+    draft:   { label: 'Nháp',      cls: 'badgeGray'   },
+    closed:  { label: 'Đã đóng',   cls: 'badgeRed'    },
+    expired: { label: 'Hết hạn',   cls: 'badgePurple' },
+};
 
 const normalizeJobStatus = (status?: string): JobStatus => {
     if (status === 'closed' || status === 'draft' || status === 'pending' || status === 'active') return status;
+    if (status === 'expired') return 'expired';
     return 'open';
 };
 
@@ -181,11 +183,14 @@ const StatCard = ({ icon, label, value, isHighlight = false }: StatCardProps) =>
 );
 
 /* ─── HRDashboard ────────────────────────────────────────────── */
+const PAGE_SIZE = 7;
+
 const HRDashboard: React.FC = () => {
-    const [stats, setStats]           = useState<DashboardStats>({ jobs: 0, candidates: 0, newCvs: 0, avgScore: 0 });
-    const [pipeline, setPipeline]     = useState<PipelineRow[]>([]);
-    const [donutData, setDonutData]   = useState<DonutSegment[]>([]);
-    const [activities, setActivities] = useState<Activity[]>([]);
+    const [stats, setStats]               = useState<DashboardStats>({ jobs: 0, candidates: 0, newCvs: 0, avgScore: 0 });
+    const [pipeline, setPipeline]         = useState<PipelineRow[]>([]);
+    const [donutData, setDonutData]       = useState<DonutSegment[]>([]);
+    const [activities, setActivities]     = useState<Activity[]>([]);
+    const [pipelinePage, setPipelinePage] = useState(1);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -209,7 +214,6 @@ const HRDashboard: React.FC = () => {
                         const apps = (appsRes.data || []) as DashboardApplication[];
                         allApps.push(...apps);
 
-                        // ĐÃ SỬA: So sánh trực tiếp với thang điểm 80
                         const aiMatched    = apps.filter((a) => getMatchScore(a) >= 80).length;
                         const interviewing = apps.filter((a) => a.status === 'interviewing').length;
 
@@ -241,7 +245,6 @@ const HRDashboard: React.FC = () => {
 
                 const totalApps  = allApps.length;
                 const totalScore = allApps.reduce((sum, a) => sum + getMatchScore(a), 0);
-                // ĐÃ SỬA: Gỡ bỏ phép nhân 100 thừa thớt để trả về đúng % thực tế
                 const avgScore   = totalApps > 0 ? Math.round(totalScore / totalApps) : 0;
                 const openJobs   = jobs.filter((job) => {
                     const status = normalizeJobStatus(job.status);
@@ -254,14 +257,17 @@ const HRDashboard: React.FC = () => {
                     newCvs:     allApps.filter(a => new Date(a.applied_at || 0).toDateString() === new Date().toDateString()).length,
                     avgScore,
                 });
-                setPipeline(pipelineRows.slice(0, 5));
+                setPipeline(pipelineRows);
+                setPipelinePage(1);
                 setActivities(dynamicActivities.slice(0, 5));
+
+                const interviewCount = allApps.filter(a => a.status === 'interviewing').length;
 
                 if (totalApps > 0) {
                     setDonutData([
-                        { pct: Math.round((statusCounts.reviewed / totalApps) * 100) || 0, color: '#1e4076', label: 'Đã đánh giá' },
-                        { pct: Math.round((statusCounts.pending  / totalApps) * 100) || 0, color: '#324257', label: 'Chờ khớp AI' },
-                        { pct: Math.round((statusCounts.hired    / totalApps) * 100) || 0, color: '#c4c6d1', label: 'Đã tuyển' },
+                        { pct: Math.round((statusCounts.reviewed / totalApps) * 100) || 0, color: '#6366f1', label: 'Đã đánh giá' },
+                        { pct: Math.round((interviewCount        / totalApps) * 100) || 0, color: '#f59e0b', label: 'Phỏng vấn'   },
+                        { pct: Math.round((statusCounts.hired    / totalApps) * 100) || 0, color: '#10b981', label: 'Đã tuyển'    },
                     ]);
                 }
             } catch (error) {
@@ -276,6 +282,9 @@ const HRDashboard: React.FC = () => {
         fetchDashboardData();
     }, []);
 
+    const totalPages = Math.ceil(pipeline.length / PAGE_SIZE);
+    const pagedPipeline = pipeline.slice((pipelinePage - 1) * PAGE_SIZE, pipelinePage * PAGE_SIZE);
+
     return (
         <HRLayout
             navSections={NAV_SECTIONS}
@@ -284,10 +293,10 @@ const HRDashboard: React.FC = () => {
             }
         >
             <div className={styles.statGrid}>
-                <StatCard icon="assignment"     label="TỔNG JOB ĐANG MỞ"     value={stats.jobs.toString()} />
-                <StatCard icon="person_search"  label="TỔNG SỐ ỨNG VIÊN"     value={stats.candidates.toString()} />
-                <StatCard icon="description"    label="CV MỚI TRONG NGÀY"     value={stats.newCvs.toString()} />
-                <StatCard icon="psychology_alt" label="AVG MATCH SCORE (AI)"  value={`${stats.avgScore}%`} isHighlight />
+                <StatCard icon="assignment"     label="TỔNG JOB ĐANG MỞ"    value={stats.jobs.toString()} />
+                <StatCard icon="person_search"  label="TỔNG SỐ ỨNG VIÊN"    value={stats.candidates.toString()} />
+                <StatCard icon="description"    label="CV MỚI TRONG NGÀY"    value={stats.newCvs.toString()} />
+                <StatCard icon="psychology_alt" label="AVG MATCH SCORE (AI)" value={`${stats.avgScore}%`} isHighlight />
             </div>
 
             <div className={styles.contentGrid}>
@@ -295,7 +304,7 @@ const HRDashboard: React.FC = () => {
                     <div className={styles.card} style={{ height: '100%' }}>
                         <div className={styles.cardHeader}>
                             <h2 className={styles.cardTitle}>Tiến độ tuyển dụng hiện tại</h2>
-                            <button className={styles.linkBtn}>Xem tất cả</button>
+                            <span className={styles.pipelineTotal}>{pipeline.length} công việc</span>
                         </div>
                         <div className={styles.tableWrapper}>
                             <table className={styles.table}>
@@ -308,7 +317,7 @@ const HRDashboard: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {pipeline.length > 0 ? pipeline.map((row, i) => (
+                                    {pagedPipeline.length > 0 ? pagedPipeline.map((row, i) => (
                                         <tr key={i}>
                                             <td>
                                                 <div className={styles.jobName}>{row.job}</div>
@@ -339,6 +348,35 @@ const HRDashboard: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Phân trang */}
+                        {totalPages > 1 && (
+                            <div className={styles.pagination}>
+                                <button
+                                    className={styles.pageBtn}
+                                    disabled={pipelinePage === 1}
+                                    onClick={() => setPipelinePage(p => p - 1)}
+                                >
+                                    Trước
+                                </button>
+                                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(page => (
+                                    <button
+                                        key={page}
+                                        className={`${styles.pageBtn} ${pipelinePage === page ? styles.pageBtnActive : ''}`}
+                                        onClick={() => setPipelinePage(page)}
+                                    >
+                                        {page}
+                                    </button>
+                                ))}
+                                <button
+                                    className={styles.pageBtn}
+                                    disabled={pipelinePage === totalPages}
+                                    onClick={() => setPipelinePage(p => p + 1)}
+                                >
+                                    Sau
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
 

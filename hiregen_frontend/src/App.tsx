@@ -18,6 +18,7 @@ import HRDashboard from './pages/hr/HRDashboard';
 import HRJobs from './pages/hr/HRJobs';
 import HRCandidates from './pages/hr/HRCandidates';
 import HRCandidateDetail from './pages/hr/HRCandidateDetail';
+import HRScheduleInterview from './pages/hr/HRScheduleInterview';
 import HRCompanies from './pages/hr/HRCompanies';
 import HRAIMatching from './pages/hr/HRAIMatching';
 import HRReports from './pages/hr/HRReports';
@@ -60,6 +61,7 @@ function App() {
               <Route path="/hr/jobs" element={<HRJobs />} />
               <Route path="/hr/candidates" element={<HRCandidates />} />
               <Route path="/hr/candidates/:id" element={<HRCandidateDetail />} />
+              <Route path="/hr/candidates/:id/schedule-interview" element={<HRScheduleInterview />} />
               <Route path="/hr/companies" element={<HRCompanies />} />
               <Route path="/hr/ai-matching" element={<HRAIMatching />} />
               <Route path="/hr/reports" element={<HRReports />} />

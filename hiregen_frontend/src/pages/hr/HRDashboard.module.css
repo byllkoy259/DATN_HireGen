@@ -87,6 +87,16 @@
 .cardTitle { font-size: 16px; font-weight: 700; color: #0f172a; margin: 0; }
 .linkBtn   { background: none; border: none; color: var(--primary); font-weight: 600; cursor: pointer; font-size: 13px; }
 
+/* ─── Pipeline total badge ───────────────────────────────────── */
+.pipelineTotal {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: #f1f5f9;
+    padding: 4px 10px;
+    border-radius: 20px;
+}
+
 /* ─── Table ──────────────────────────────────────────────────── */
 .tableWrapper { flex: 1; overflow-y: auto; }
 .table        { width: 100%; border-collapse: collapse; }
@@ -109,6 +119,50 @@
 .badgeGreen  { background: #d1fae5; color: #065f46; }
 .badgeGray   { background: #f1f5f9; color: #475569; }
 .badgeRed    { background: #fee2e2; color: #991b1b; }
+.badgePurple { background: #f3e8ff; color: #7c3aed; }
+
+/* ─── Pagination ─────────────────────────────────────────────── */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 14px 24px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.pageBtn {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid var(--outline);
+    background: white;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-main);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.pageBtn:hover:not(:disabled) {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #eff6ff;
+}
+.pageBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.pageBtnActive {
+    background: var(--primary);
+    color: white !important;
+    border-color: var(--primary);
+}
+.pageBtnActive:hover {
+    background: var(--primary) !important;
+    color: white !important;
+}
 
 /* ─── Donut Chart ────────────────────────────────────────────── */
 .donutContainer { display: flex; align-items: center; padding: 20px; flex: 1; }

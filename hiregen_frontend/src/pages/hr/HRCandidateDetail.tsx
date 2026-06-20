@@ -32,21 +32,20 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 /* ─── Types ──────────────────────────────────────────────────── */
-// ĐÃ SỬA: Bổ sung thêm 'processed' và 'withdrawn' vào type
 type AppStatus = 'pending' | 'processed' | 'reviewing' | 'shortlisted' | 'interviewing' | 'rejected' | 'hired' | 'accepted' | 'withdrawn';
 
 interface GapItem {
     skill: string;
-    required: number;   // 0-5
-    actual: number;     // 0-5
+    required: number;
+    actual: number;
     note: string;
     severity?: 'gap' | 'attention';
 }
 
 interface RadarPoint {
     label: string;
-    candidate: number;  // 0-100
-    required: number;   // 0-100
+    candidate: number;
+    required: number;
 }
 
 interface AIQuestion {
@@ -128,7 +127,6 @@ interface CandidateDetail {
     pipeline_comparison?: PipelineComparison;
 }
 
-// ĐÃ SỬA: Mapping đầy đủ các trạng thái để giao diện tra cứu an toàn
 const STATUS_META: Record<AppStatus, { label: string; cls: string }> = {
     pending:      { label: 'Mới nộp',        cls: 'sPending' },
     processed:    { label: 'Đang đánh giá',  cls: 'sReviewing' },
@@ -229,20 +227,20 @@ const RadarChart: React.FC<{ data: RadarPoint[] }> = ({ data }) => {
    Component
 ═══════════════════════════════════════════════════════════════ */
 const HRCandidateDetail: React.FC = () => {
-    const { id } = useParams<{ id: string }>(); 
+    const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [candidate, setCandidate] = useState<CandidateDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [cvExpanded, setCvExpanded] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [actionLoading, setActionLoading] = useState<'invite' | 'reject' | 'rerun' | null>(null);
+    const [actionLoading, setActionLoading] = useState<'reject' | 'rerun' | null>(null);
 
     useEffect(() => {
         const fetchDetail = async () => {
             if (!id) return;
             setLoading(true);
             try {
-                const res = await axiosClient.get(`/api/hr/applications/${id}/ai-report`); 
+                const res = await axiosClient.get(`/api/hr/applications/${id}/ai-report`);
                 setCandidate(res.data);
             } catch {
                 setCandidate(null);
@@ -253,17 +251,21 @@ const HRCandidateDetail: React.FC = () => {
         fetchDetail();
     }, [id]);
 
-    const handleInvite = async () => {
+    /* Điều hướng sang trang lên lịch thay vì gọi API trực tiếp */
+    const handleInvite = () => {
         if (!candidate) return;
-        setActionLoading('invite');
-        try {
-            await axiosClient.put(`/api/hr/applications/${candidate.application_id}/status`, { status: 'interviewing' });
-            setCandidate({ ...candidate, status: 'interviewing' });
-        } catch {
-            alert('Không thể mời phỏng vấn. Vui lòng thử lại.');
-        } finally {
-            setActionLoading(null);
-        }
+        navigate(`/hr/candidates/${id}/schedule-interview`, {
+            state: {
+                application_id: candidate.application_id,
+                applicant_name: candidate.applicant_name,
+                job_title:      candidate.job_title,
+                partner_name:   candidate.partner_name,
+                match_score:    candidate.match_score,
+                avatar_color:   candidate.avatar_color,
+                initials:       candidate.initials,
+                location:       candidate.location,
+            },
+        });
     };
 
     const handleReject = async () => {
@@ -325,7 +327,6 @@ const HRCandidateDetail: React.FC = () => {
         );
     }
 
-    // ĐÃ SỬA: Lớp bảo vệ Fallback tuyệt đối. Nếu biến candidate.status bị lạ, gán ngay giá trị an toàn
     const visibleStatus = normalizeStatus(candidate.status);
     const sm = STATUS_META[visibleStatus] || { label: candidate.status || 'Đang xử lý', cls: 'sPending' };
     const mc = matchColor(candidate.match_score);
@@ -362,8 +363,8 @@ const HRCandidateDetail: React.FC = () => {
                 ? 'Baseline lỗi'
                 : '';
     const baselineStatusClass = baselineStatus === 'skipped'
-            ? styles.pipelineWarningMuted
-            : styles.pipelineWarning;
+        ? styles.pipelineWarningMuted
+        : styles.pipelineWarning;
     const deltaClass = typeof scoreDelta === 'number' && scoreDelta > 0
         ? styles.deltaPositive
         : typeof scoreDelta === 'number' && scoreDelta < 0
@@ -425,7 +426,6 @@ const HRCandidateDetail: React.FC = () => {
                         </div>
                         <h2 className={styles.candidateName}>{candidate.applicant_name}</h2>
                         <p className={styles.birthYear}>{candidate.birth_year}</p>
-                        {/* Gọi an toàn sm.cls nhờ cơ chế Fallback */}
                         <span className={`${styles.statusBadge} ${styles[sm.cls]}`}>{sm.label}</span>
 
                         <div className={styles.divider} />
@@ -435,7 +435,7 @@ const HRCandidateDetail: React.FC = () => {
                         <p className={styles.partnerName}>
                             {candidate.partner_name}
                             <span className={styles.dot2}>·</span>
-                            {candidate.location.split('·')[1]?.trim() || 'Vietnam'}
+                            {candidate.location || 'Vietnam'}
                         </p>
                         <p className={styles.appliedAt}>
                             <span className="material-symbols-outlined">schedule</span>
@@ -481,7 +481,7 @@ const HRCandidateDetail: React.FC = () => {
                         <div className={styles.card}>
                             <div className={styles.cardHeader}>
                                 <span className="material-symbols-outlined">query_stats</span>
-                                <span>Điểm tương quan & ITSS</span>
+                                <span>Điểm tương quan &amp; ITSS</span>
                             </div>
                             <div className={styles.cardBody}>
                                 <div className={styles.scoreRing}>
@@ -698,9 +698,9 @@ const HRCandidateDetail: React.FC = () => {
                     <button
                         className={styles.btnInvite}
                         onClick={handleInvite}
-                        disabled={actionLoading === 'invite'}
+                        disabled={candidate?.status === 'interviewing'}
                     >
-                        {actionLoading === 'invite' ? 'Đang xử lý…' : 'Mời phỏng vấn'}
+                        {candidate?.status === 'interviewing' ? 'Đã hẹn phỏng vấn' : 'Mời phỏng vấn'}
                         <span className="material-symbols-outlined">arrow_forward</span>
                     </button>
                 </div>

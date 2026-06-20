@@ -302,16 +302,16 @@ async def get_application_ai_report(
         applicant_name = candidate_profile.full_name or "Chưa cập nhật"
         applicant_email = candidate_profile.user.email if getattr(candidate_profile, "user", None) else "Chưa cập nhật"
         birth_year = candidate_profile.date_of_birth.year if getattr(candidate_profile, "date_of_birth", None) else "Chưa cập nhật"
-        location = getattr(candidate_profile, "address", None) or "Chưa cập nhật"
         portfolio_url = getattr(candidate_profile, "portfolio_url", None) or ""
         has_linkedin = bool(getattr(candidate_profile, "linkedin_url", None))
     else:
         applicant_name = "Chưa cập nhật"
         applicant_email = "Chưa cập nhật"
         birth_year = "Chưa cập nhật"
-        location = "Chưa cập nhật"
         portfolio_url = ""
         has_linkedin = False
+
+    location = application.job.location if application.job and getattr(application.job, "location", None) else "Chưa cập nhật"
 
     # 3. TỰ ĐỘNG ĐỐI CHIẾU DANH TÍNH (So sánh tên CV vs Tên tài khoản)
     cv_full_name = personal_info.get("full_name", "").strip()

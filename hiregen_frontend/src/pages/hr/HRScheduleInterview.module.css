@@ -1,0 +1,458 @@
+/* ─── Breadcrumb ─────────────────────────────────────────────── */
+.breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 20px;
+    font-family: 'Manrope', sans-serif;
+}
+.breadcrumbBack {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.18s;
+}
+.breadcrumbBack:hover { color: var(--primary); }
+.breadcrumbBack .material-symbols-outlined { font-size: 17px; }
+.breadcrumbCurrent {
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+/* ─── Page Layout ────────────────────────────────────────────── */
+.pageGrid {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+    align-items: start;
+}
+@media (max-width: 900px) {
+    .pageGrid { grid-template-columns: 1fr; }
+}
+
+/* ─── Summary Column ─────────────────────────────────────────── */
+.summaryCol {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: sticky;
+    top: 24px;
+}
+
+/* ─── Candidate Card ─────────────────────────────────────────── */
+.candidateCard {
+    background: white;
+    border: 1px solid var(--outline);
+    border-radius: 12px;
+    padding: 24px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    font-family: 'Manrope', sans-serif;
+}
+.avatar {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    font-weight: 800;
+    color: white;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    flex-shrink: 0;
+}
+.candidateName {
+    font-family: 'Manrope', sans-serif;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin: 0 0 4px;
+}
+.jobInfo {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0 0 4px;
+}
+.partnerInfo {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+}
+.partnerInfo .material-symbols-outlined { font-size: 14px; color: #94a3b8; }
+.scoreRow {
+    margin-bottom: 14px;
+}
+.scoreBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 800;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    white-space: nowrap;
+    border: 1px solid;
+    background: white;
+}
+.scoreBadge .material-symbols-outlined { font-size: 16px; margin-top: 1px; }
+.divider {
+    width: 100%;
+    height: 1px;
+    background: var(--outline);
+    margin: 16px 0;
+}
+.inviteNote {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    background: #f0f7ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: left;
+    line-height: 1.5;
+}
+.inviteNote .material-symbols-outlined { font-size: 16px; color: #3b82f6; flex-shrink: 0; margin-top: 1px; }
+
+/* ─── Preview Card ───────────────────────────────────────────── */
+.previewCard {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--outline);
+    overflow: hidden;
+}
+.previewHeader {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 18px;
+    background: linear-gradient(135deg, rgba(30,64,118,0.04), rgba(30,64,118,0.02));
+    border-bottom: 1px solid var(--outline);
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary);
+}
+.previewHeader .material-symbols-outlined { font-size: 18px; }
+.previewBody {
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.previewRow {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.previewRow .material-symbols-outlined { font-size: 18px; color: var(--primary); margin-top: 2px; flex-shrink: 0; }
+.previewLabel {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 2px;
+}
+.previewValue {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin: 0;
+}
+.previewValueLink {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary);
+    margin: 0;
+    word-break: break-all;
+}
+
+/* ─── Form Column ────────────────────────────────────────────── */
+.formCol {}
+.formCard {
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--outline);
+    overflow: hidden;
+}
+.formHeader {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid var(--outline);
+    background: linear-gradient(135deg, rgba(30,64,118,0.03) 0%, rgba(3,105,161,0.02) 100%);
+}
+.formHeader > .material-symbols-outlined {
+    font-size: 28px;
+    color: var(--primary);
+    margin-top: 2px;
+}
+.formTitle {
+    font-family: 'Manrope', sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin: 0 0 4px;
+}
+.formSubtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+/* ─── Section ────────────────────────────────────────────────── */
+.section {
+    padding: 22px 28px;
+    border-bottom: 1px solid var(--outline);
+}
+.section:last-of-type {
+    border-bottom: none;
+}
+.sectionTitle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-main);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.stepDot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.optional {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ─── Date Time Row ─────────────────────────────────────────── */
+.dateTimeRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+@media (max-width: 600px) {
+    .dateTimeRow { grid-template-columns: 1fr; }
+}
+
+/* ─── Field ──────────────────────────────────────────────────── */
+.fieldGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+.fieldGroup:last-child { margin-bottom: 0; }
+.fieldLabel {
+    font-size: 12px;
+    font-weight: 700;
+    color: #374151;
+}
+.required { color: #dc2626; }
+
+/* Override Ant Design DatePicker & TimePicker */
+.antPicker {
+    width: 100%;
+    height: 42px;
+    border-radius: 8px !important;
+    border-color: var(--outline) !important;
+    font-family: 'Manrope', sans-serif !important;
+}
+.antPicker:hover, .antPicker:focus-within {
+    border-color: var(--primary) !important;
+    box-shadow: 0 0 0 2px rgba(30,64,118,0.1) !important;
+}
+
+/* ─── Format Grid ────────────────────────────────────────────── */
+.formatGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+@media (max-width: 560px) {
+    .formatGrid { grid-template-columns: 1fr; }
+}
+.formatBtn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 12px;
+    border-radius: 10px;
+    border: 2px solid var(--outline);
+    background: var(--surface);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: 'Manrope', sans-serif;
+    text-align: center;
+}
+.formatBtn:hover {
+    border-color: var(--primary);
+    background: rgba(30,64,118,0.03);
+    transform: translateY(-2px);
+}
+.formatBtnActive {
+    border-color: var(--primary);
+    background: rgba(30,64,118,0.06);
+    box-shadow: 0 0 0 3px rgba(30,64,118,0.12);
+}
+.formatIcon {
+    font-size: 22px;
+    color: var(--primary);
+}
+.formatLabel {
+    font-size: 13px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+.formatSub {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* ─── Input ──────────────────────────────────────────────────── */
+.inputWrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1.5px solid var(--outline);
+    border-radius: 8px;
+    padding: 0 14px;
+    background: white;
+    transition: border-color 0.18s;
+}
+.inputWrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30,64,118,0.1); }
+.inputWrapper .material-symbols-outlined { font-size: 18px; color: #94a3b8; flex-shrink: 0; }
+.textInput {
+    flex: 1;
+    height: 42px;
+    border: none;
+    outline: none;
+    font-family: 'Manrope', sans-serif;
+    font-size: 14px;
+    color: var(--text-main);
+    background: transparent;
+}
+.textInput::placeholder { color: #b0b8c4; }
+
+/* ─── Textarea ───────────────────────────────────────────────── */
+.textarea {
+    width: 100%;
+    border: 1.5px solid var(--outline);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-family: 'Manrope', sans-serif;
+    font-size: 14px;
+    color: var(--text-main);
+    background: white;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.18s;
+    box-sizing: border-box;
+}
+.textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(30,64,118,0.1); }
+.textarea::placeholder { color: #b0b8c4; }
+
+/* ─── Placeholder text ───────────────────────────────────────── */
+.placeholder {
+    font-size: 13px;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0;
+}
+
+/* ─── Action Bar ─────────────────────────────────────────────── */
+.actionBar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 28px;
+    border-top: 1px solid var(--outline);
+    background: var(--surface);
+}
+.btnBack {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 40px;
+    padding: 0 16px;
+    border-radius: 8px;
+    border: 1px solid var(--outline);
+    background: white;
+    color: var(--text-main);
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btnBack:hover { border-color: var(--primary); color: var(--primary); }
+.btnBack .material-symbols-outlined { font-size: 18px; }
+.btnConfirm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+    padding: 0 24px;
+    border-radius: 8px;
+    border: none;
+    background: var(--primary);
+    color: white;
+    font-family: 'Manrope', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btnConfirm:hover:not(:disabled) {
+    background: var(--primary-dk);
+    transform: translateY(-1px);
+}
+.btnConfirm:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+}
+.btnConfirm .material-symbols-outlined { font-size: 18px; }

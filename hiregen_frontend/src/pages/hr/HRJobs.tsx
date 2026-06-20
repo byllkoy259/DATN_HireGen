@@ -7,7 +7,7 @@ import type { NavSection } from '../../layouts/hr/HRLayout';
 import axiosClient from '../../services/axiosClient';
 
 /* ─── Types ─────────────────────────────────────────────────── */
-type JobStatus = 'active' | 'pending' | 'draft' | 'closed';
+type JobStatus = 'active' | 'draft' | 'closed' | 'expired';
 
 interface JobCard {
     id: string;
@@ -71,11 +71,11 @@ const NAV_SECTIONS: NavSection[] = [
 
 /* ─── Helpers ────────────────────────────────────────────────── */
 const STATUS_TABS = [
-    { key: 'all',     label: 'Tất cả'  },
-    { key: 'active',  label: 'Active'  },
-    { key: 'pending', label: 'Pending' },
-    { key: 'draft',   label: 'Draft'   },
-    { key: 'closed',  label: 'Đã đóng' },
+    { key: 'all',     label: 'Tất cả'   },
+    { key: 'active',  label: 'Đang mở'  },
+    { key: 'expired', label: 'Hết hạn'  },
+    { key: 'draft',   label: 'Nháp'     },
+    { key: 'closed',  label: 'Đã đóng'  },
 ] as const;
 
 type TabKey = typeof STATUS_TABS[number]['key'];
@@ -95,6 +95,7 @@ const JobCardEl: React.FC<JobCardElProps> = ({ job, onEdit, onToggleStatus }) =>
     const isExpiring   = job.daysLeft > 0 && job.daysLeft <= 7;
     const isClosed     = job.status === 'closed';
     const isDraft      = job.status === 'draft';
+    const isExpired    = job.status === 'expired';
 
     return (
         <div className={`${styles.jobCard} ${isClosed ? styles.jobCardClosed : ''}`}>
@@ -159,12 +160,14 @@ const JobCardEl: React.FC<JobCardElProps> = ({ job, onEdit, onToggleStatus }) =>
             <div className={styles.cardFooter}>
                 {isClosed ? (
                     <span className={styles.closedTag}>Đã đóng</span>
+                ) : isExpired ? (
+                    <span className={styles.expiredTag}>Hết hạn</span>
                 ) : isDraft ? (
                     <span />
                 ) : (
                     <span className={`${styles.expiry} ${isExpiring ? styles.expiryUrgent : ''}`}>
                         <span className="material-symbols-outlined">schedule</span>
-                        {isExpiring ? `${job.daysLeft} ngày` : `${job.daysLeft} ngày còn lại`}
+                        {isExpiring ? `Còn ${job.daysLeft} ngày` : `${job.daysLeft} ngày còn lại`}
                     </span>
                 )}
                 <a href="/hr/candidates" className={styles.viewLink}>Xem ứng viên</a>
@@ -269,10 +272,17 @@ const HRJobs: React.FC = () => {
                         daysLeft = Math.max(0, diff);
                     }
 
-                    const statusMap: Record<string, JobStatus> = {
-                        open:   'active',
-                        draft:  'draft',
-                        closed: 'closed',
+                    // Map backend status → frontend JobStatus
+                    // Backend values: 'open', 'active', 'draft', 'closed', 'expired'
+                    // Auto-detect 'expired' khi deadline đã qua nhưng job vẫn 'active'/'open'
+                    const resolveStatus = (): JobStatus => {
+                        const s = j.status;
+                        if (s === 'closed') return 'closed';
+                        if (s === 'draft')  return 'draft';
+                        if (s === 'expired') return 'expired';
+                        // 'open' hoặc 'active' — kiểm tra deadline
+                        if (daysLeft === 0 && j.deadline) return 'expired';
+                        return 'active';
                     };
 
                     return {
@@ -297,7 +307,7 @@ const HRJobs: React.FC = () => {
                         interviews,
                         avgMatchScore:     totalApplicants > 0 ? Math.round(totalScore / totalApplicants) : 0,
                         daysLeft,
-                        status:            statusMap[j.status] ?? 'pending',
+                        status:            resolveStatus(),
                     } satisfies JobCard;
                 })
             );
@@ -411,7 +421,7 @@ const HRJobs: React.FC = () => {
     const tabCounts = {
         all:     jobs.length,
         active:  jobs.filter(j => j.status === 'active').length,
-        pending: jobs.filter(j => j.status === 'pending').length,
+        expired: jobs.filter(j => j.status === 'expired').length,
         draft:   jobs.filter(j => j.status === 'draft').length,
         closed:  jobs.filter(j => j.status === 'closed').length,
     };
@@ -430,7 +440,7 @@ const HRJobs: React.FC = () => {
             return 0;
         });
 
-    const subtitle = `${tabCounts.active} active · ${tabCounts.pending} pending · ${tabCounts.draft} draft · ${tabCounts.closed} đã đóng`;
+    const subtitle = `${tabCounts.active} đang mở · ${tabCounts.expired} hết hạn · ${tabCounts.draft} nháp · ${tabCounts.closed} đã đóng`;
 
     return (
         <HRLayout

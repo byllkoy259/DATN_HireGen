@@ -353,10 +353,16 @@
     padding: 3px 10px;
     border-radius: 9999px;
 }
-.viewLink {
-    font-size: 12px;
+.expiredTag {
+    display: inline-block;
+    font-size: 10px;
     font-weight: 700;
-    color: var(--primary);
+    background: #fef3c7;
+    color: #b45309;
+    padding: 3px 10px;
+    border-radius: 9999px;
+}
+.viewLink {
     text-decoration: none;
     white-space: nowrap;
     flex-shrink: 0;

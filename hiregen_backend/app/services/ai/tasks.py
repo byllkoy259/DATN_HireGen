@@ -1,5 +1,6 @@
 import asyncio
 import re
+import chromadb
 import unicodedata
 from datetime import datetime
 from typing import Any
@@ -17,14 +18,19 @@ from app.services.ai.extractor import PROMPT_VERSION, extract_cv_to_json
 from app.services.ai.embedding import get_text_embedding
 from app.services.ai.matcher import baseline_match_cv_with_jd
 
-try:
-    import chromadb
+cv_collection = None 
 
-    chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
-    cv_collection = chroma_client.get_or_create_collection(name="baseline_candidate_cvs")
-except Exception as exc:
-    print(f"[ChromaDB Warning] Vector store is unavailable: {exc}")
-    cv_collection = None
+def get_chroma_collection():
+    global cv_collection
+    if cv_collection is not None:
+        return cv_collection
+    try:
+        chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
+        cv_collection = chroma_client.get_or_create_collection(name="baseline_candidate_cvs")
+        return cv_collection
+    except Exception as exc:
+        print(f"[ChromaDB Warning] Vector store is unavailable: {exc}")
+        return None
 
 PIPELINE_VERSION = "hybrid_standardized_v3_general_guard"
 RUBRIC_VERSION = "itss_family_grouped_rubric_v2"
@@ -1466,10 +1472,11 @@ async def async_process_cv_pipeline(application_id: str, file_url: str):
         except Exception as exc:
             print(f"[Matching Error] Cannot calculate embedding score: {exc}")
 
-    if cv_collection is not None:
+    collection = get_chroma_collection()
+    if collection is not None:
         try:
             cv_vector = get_text_embedding(cv_embedding_text)
-            cv_collection.upsert(
+            collection.upsert(
                 embeddings=[cv_vector],
                 documents=[cv_embedding_text],
                 metadatas=[{
@@ -1573,9 +1580,6 @@ async def async_process_cv_pipeline(application_id: str, file_url: str):
 @celery_app.task(name="process_candidate_cv_task")
 def process_candidate_cv_task(application_id: str, file_url: str):
     async def runner():
-        try:
-            await async_process_cv_pipeline(application_id, file_url)
-        finally:
-            await engine.dispose()
+        await async_process_cv_pipeline(application_id, file_url)
 
     asyncio.run(runner())

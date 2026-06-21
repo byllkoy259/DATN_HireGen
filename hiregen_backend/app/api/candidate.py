@@ -1,6 +1,7 @@
 import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy import delete
@@ -88,10 +89,11 @@ async def upload_resume_file_api(
             filename=file.filename,
         )
         
-        cv_url = minio_service.upload_file(
-            object_name=object_name,
-            file_data=file_data,
-            content_type=file.content_type
+        cv_url = await run_in_threadpool(
+            minio_service.upload_file,
+            object_name,
+            file_data,
+            file.content_type
         )
         
         new_resume = Resume(

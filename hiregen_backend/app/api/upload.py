@@ -1,4 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from app.api.deps import get_current_user
 from app.models.models import User
 from app.services.storage_service import minio_service
@@ -24,10 +25,11 @@ async def upload_file_api(
         )
         
         # Đẩy file lên MinIO
-        file_url = minio_service.upload_file(
-            object_name=object_name,
-            file_data=file_data,
-            content_type=file.content_type
+        file_url = await run_in_threadpool(
+            minio_service.upload_file,
+            object_name,
+            file_data,
+            file.content_type
         )
         
         return {"url": file_url}

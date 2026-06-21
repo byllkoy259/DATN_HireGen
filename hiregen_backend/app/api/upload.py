@@ -1,7 +1,7 @@
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from app.api.deps import get_current_user
 from app.models.models import User
-from app.services.minio_service import minio_service
+from app.services.storage_service import minio_service
 
 router = APIRouter(
     prefix="/api/upload",

@@ -1,6 +1,6 @@
 import io
 from pypdf import PdfReader
-from app.services.minio_service import minio_service
+from app.services.storage_service import minio_service
 
 def parse_pdf_bytes_to_text(pdf_bytes: bytes) -> str:
     """

@@ -13,7 +13,7 @@ from app.schemas.candidate import (
     CandidateProfileUpdate, CandidateProfileResponse, CandidateApplicationListResponse
 )
 from app.api.deps import get_current_user
-from app.services.minio_service import minio_service
+from app.services.storage_service import minio_service
 from app.services.ai.tasks import process_candidate_cv_task
 
 router = APIRouter(

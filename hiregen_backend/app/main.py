@@ -35,7 +35,13 @@ async def create_init_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await create_init_admin()
+    print("[1] FastAPI bắt đầu khởi động...")
+    try:
+        print("[2] Đang gọi DB tạo Admin...")
+        await create_init_admin()
+        print("[3] Khởi tạo Admin thành công!")
+    except Exception as e:
+        print(f"[LỖI DB] Không thể kết nối Database: {e}")
     yield
     print("Hệ thống đang tắt...")
 

@@ -20,7 +20,7 @@ from app.services.ai.matcher import baseline_match_cv_with_jd
 try:
     import chromadb
 
-    chroma_client = chromadb.HttpClient(host="localhost", port=8001)
+    chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
     cv_collection = chroma_client.get_or_create_collection(name="baseline_candidate_cvs")
 except Exception as exc:
     print(f"[ChromaDB Warning] Vector store is unavailable: {exc}")

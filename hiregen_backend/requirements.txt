@@ -3,9 +3,9 @@ asyncpg
 bcrypt==4.0.1
 celery
 chromadb
+cloudinary
 fastapi
 google-genai
-minio
 passlib
 psycopg2-binary
 pydantic

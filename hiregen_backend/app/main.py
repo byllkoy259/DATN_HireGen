@@ -49,6 +49,8 @@ app = FastAPI(
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    "https://hiregen.vercel.app",
+    "https://hiregen-frontend.vercel.app",
 ]
 
 app.add_middleware(

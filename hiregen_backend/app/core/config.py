@@ -18,12 +18,10 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: str
     ADMIN_PASSWORD: str
 
-    # MinIO
-    MINIO_ENDPOINT: str
-    MINIO_ACCESS_KEY: str
-    MINIO_SECRET_KEY: str
-    MINIO_SECURE: bool
-    MINIO_BUCKET_NAME: str
+    # Cloudinary (thay MinIO)
+    CLOUDINARY_CLOUD_NAME: str
+    CLOUDINARY_API_KEY: str
+    CLOUDINARY_API_SECRET: str
 
     # GEMINI API
     GEMINI_API_KEY: str
@@ -31,6 +29,10 @@ class Settings(BaseSettings):
 
     # Redis
     REDIS_URL: str
+
+    # ChromaDB
+    CHROMA_HOST: str
+    CHROMA_PORT: int
 
     # URL Database
     @computed_field

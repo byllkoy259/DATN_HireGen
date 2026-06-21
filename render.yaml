@@ -1,0 +1,98 @@
+services:
+  - type: web
+    name: hiregen-backend
+    runtime: docker
+    dockerfilePath: ./hiregen_backend/Dockerfile
+    dockerContext: ./hiregen_backend
+    envVars:
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        value: "5432"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RUN_BASELINE_PIPELINE
+        value: "True"
+      - key: REDIS_URL
+        sync: false
+      - key: CHROMA_HOST
+        sync: false
+      - key: CHROMA_PORT
+        value: "8000"
+
+  - type: worker
+    name: hiregen-celery-worker
+    runtime: docker
+    dockerfilePath: ./hiregen_backend/Dockerfile
+    dockerContext: ./hiregen_backend
+    startCommand: celery -A app.core.celery_app worker --loglevel=info --concurrency=1
+    envVars:
+      - key: POSTGRES_USER
+        sync: false
+      - key: POSTGRES_PASSWORD
+        sync: false
+      - key: POSTGRES_DB
+        sync: false
+      - key: POSTGRES_HOST
+        sync: false
+      - key: POSTGRES_PORT
+        value: "5432"
+      - key: SECRET_KEY
+        sync: false
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: RUN_BASELINE_PIPELINE
+        value: "True"
+      - key: REDIS_URL
+        sync: false
+      - key: CHROMA_HOST
+        sync: false
+
+  - type: web
+    name: hiregen-chromadb
+    runtime: docker
+    image:
+      url: chromadb/chroma:latest
+    envVars:
+      - key: IS_PERSISTENT
+        value: "TRUE"
+    disk:
+      name: chroma-data
+      mountPath: /chroma/chroma
+      sizeGB: 1

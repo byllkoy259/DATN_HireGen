@@ -34,11 +34,6 @@ interface UserCV {
 }
 
 /* ─── Helpers ────────────────────────────────────────────────── */
-const getCompanyInitials = (name?: string) => {
-    if (!name) return 'IT';
-    return name.substring(0, 2).toUpperCase();
-};
-
 const formatSalary = (min?: number, max?: number, rangeStr?: string) => {
     if (rangeStr) return rangeStr;
     if (!min && !max) return 'Thỏa thuận';

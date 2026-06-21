@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import styles from './HRLayout.module.css';
 import Logo from '../../components/common/Logo';
+import NotificationBell from '../../components/common/NotificationBell';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import axiosClient from '../../services/axiosClient';
@@ -234,9 +235,7 @@ const HRLayout: React.FC<HRLayoutProps> = ({
                         </p>
                     </div>
                     <div className={styles.topbarRight}>
-                        <button className={styles.iconBtn}>
-                            <span className="material-symbols-outlined">notifications</span>
-                        </button>
+                        <NotificationBell />
                         {/* Các nút action tuỳ theo từng trang */}
                         {headerActions}
                     </div>

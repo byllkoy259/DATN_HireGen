@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button, Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import Logo from '../common/Logo';
+import NotificationBell from '../common/NotificationBell';
 import axiosClient from '../../services/axiosClient';
 import {
     clearSession,
@@ -132,19 +133,22 @@ const Header: React.FC = () => {
 
                 <div className={styles.navActions}>
                     {isAuthenticated ? (
-                        <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight" arrow>
-                            <button type="button" className={styles.userTrigger}>
-                                <span className={styles.userAvatar}>
-                                    {userData.avatarUrl ? (
-                                        <img src={userData.avatarUrl} alt={userData.name} />
-                                    ) : (
-                                        userData.displayInitial
-                                    )}
-                                </span>
-                                <span className={styles.userName}>{userData.name}</span>
-                                <span className="material-symbols-outlined">expand_more</span>
-                            </button>
-                        </Dropdown>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <NotificationBell />
+                            <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight" arrow>
+                                <button type="button" className={styles.userTrigger}>
+                                    <span className={styles.userAvatar}>
+                                        {userData.avatarUrl ? (
+                                            <img src={userData.avatarUrl} alt={userData.name} />
+                                        ) : (
+                                            userData.displayInitial
+                                        )}
+                                    </span>
+                                    <span className={styles.userName}>{userData.name}</span>
+                                    <span className="material-symbols-outlined">expand_more</span>
+                                </button>
+                            </Dropdown>
+                        </div>
                     ) : (
                         <>
                             <Button

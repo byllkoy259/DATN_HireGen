@@ -5,7 +5,7 @@ import CandidateLayout from '../../layouts/candidate/CandidateLayout';
 import axiosClient from '../../services/axiosClient';
 
 /* ─── Types ──────────────────────────────────────────────────── */
-type AppStage = 'pending' | 'reviewing' | 'interviewing' | 'rejected' | 'hired';
+type AppStage = 'pending' | 'reviewing' | 'shortlisted' | 'interviewing' | 'rejected' | 'hired';
 
 interface ApplicationDetail {
     id: string;
@@ -28,27 +28,30 @@ interface ApplicationDetail {
 
 /* ─── Cấu hình Trạng thái (Stage Meta) ───────────────────────── */
 const STAGE_CONFIG: Record<AppStage, { label: string; cls: string; icon: string; color: string }> = {
-    pending:   { label: 'Đã nộp · Chờ phản hồi', cls: 'stageNew',   icon: 'send',         color: '#0066cc' },
-    reviewing: { label: 'HR đang xem xét',        cls: 'stageReview', icon: 'visibility',   color: '#5b21b6' },
-    interviewing: { label: 'Lịch phỏng vấn',         cls: 'stageInterview', icon: 'event',        color: '#0f6e68' },
-    hired:     { label: 'Đã nhận việc',              cls: 'stageOffer',     icon: 'celebration',  color: '#008a4b' },
-    rejected:  { label: 'Không phù hợp',           cls: 'stageRejected',  icon: 'close',        color: '#808080' },
+    pending:      { label: 'Mới nộp',       cls: 'stageNew',       icon: 'send',         color: '#0066cc' },
+    reviewing:    { label: 'Đang đánh giá', cls: 'stageReview',    icon: 'visibility',   color: '#5b21b6' },
+    shortlisted:  { label: 'Đạt sơ tuyển',  cls: 'stageReview',    icon: 'verified',     color: '#6366f1' },
+    interviewing: { label: 'Hẹn phỏng vấn', cls: 'stageInterview', icon: 'event',        color: '#0f6e68' },
+    rejected:     { label: 'Từ chối',       cls: 'stageRejected',  icon: 'close',        color: '#808080' },
+    hired:        { label: 'Đã tuyển',      cls: 'stageOffer',     icon: 'celebration',  color: '#008a4b' },
 };
 
 const FILTER_TABS: { key: 'all' | AppStage; label: string }[] = [
-    { key: 'all',       label: 'Tất cả đơn' },
-    { key: 'pending',       label: 'Đã nộp' },
-    { key: 'reviewing',    label: 'Đang xem xét' },
+    { key: 'all',          label: 'Tất cả đơn' },
+    { key: 'pending',      label: 'Mới nộp' },
+    { key: 'reviewing',    label: 'Đang đánh giá' },
+    { key: 'shortlisted',  label: 'Đạt sơ tuyển' },
     { key: 'interviewing', label: 'Phỏng vấn' },
-    { key: 'hired',     label: 'Đã nhận' },
-    { key: 'rejected',  label: 'Đã từ chối' },
+    { key: 'hired',        label: 'Đã tuyển' },
+    { key: 'rejected',     label: 'Từ chối' },
 ];
 
 const normalizeStage = (status?: string): AppStage => {
     if (status === 'interviewing') return 'interviewing';
     if (status === 'rejected' || status === 'withdrawn') return 'rejected';
     if (status === 'hired' || status === 'accepted' || status === 'offered') return 'hired';
-    if (status === 'reviewing' || status === 'processed' || status === 'shortlisted') return 'reviewing';
+    if (status === 'shortlisted') return 'shortlisted';
+    if (status === 'reviewing' || status === 'processed') return 'reviewing';
     return 'pending';
 };
 
@@ -124,9 +127,6 @@ const CandidateApplications: React.FC = () => {
             return matchTab && matchQuery;
         });
     }, [applications, activeTab, searchQuery]);
-
-    // Lấy ký tự đầu làm Logo placeholder
-    const getInitials = (name: string) => name ? name.substring(0, 2).toUpperCase() : 'IT';
 
     return (
         <CandidateLayout

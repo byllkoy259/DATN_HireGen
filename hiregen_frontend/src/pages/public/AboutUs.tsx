@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from 'antd';
-import Logo from '../../components/common/Logo';
 import Header from '../../components/layouts/Header';
 import Footer from '../../components/layouts/Footer';
 import styles from './AboutUs.module.css';

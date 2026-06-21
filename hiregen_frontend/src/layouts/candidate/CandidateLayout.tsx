@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import styles from './CandidateLayout.module.css';
 import Logo from '../../components/common/Logo';
+import NotificationBell from '../../components/common/NotificationBell';
 import { Dropdown } from 'antd';
 import type { MenuProps } from 'antd';
 import axiosClient from '../../services/axiosClient';
@@ -36,7 +37,6 @@ export interface CandidateLayoutProps {
      * Cấu hình các section trong sidebar nav.
      */
     navSections?: NavSection[];
-    notifCount?: number;
 }
 
 /* ─── Default Nav Config ─────────────────────────────────────── */
@@ -72,7 +72,6 @@ const CandidateLayout: React.FC<CandidateLayoutProps> = ({
     headerActions,
     children,
     navSections = CANDIDATE_NAV_SECTIONS,
-    notifCount = 0,
 }) => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -237,10 +236,7 @@ const CandidateLayout: React.FC<CandidateLayoutProps> = ({
                         </p>
                     </div>
                     <div className={styles.topbarRight}>
-                        <button className={styles.iconBtn} onClick={() => navigate('/candidate/notifications')}>
-                            <span className="material-symbols-outlined">notifications</span>
-                            {notifCount > 0 && <span className={styles.notifDot} />}
-                        </button>
+                        <NotificationBell />
                         {/* Các nút action tuỳ theo từng trang */}
                         {headerActions ?? (
                             <button

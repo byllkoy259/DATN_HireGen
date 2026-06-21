@@ -7,7 +7,7 @@ from sqlalchemy import delete
 from sqlalchemy.orm import joinedload
 
 from app.core.database import get_db
-from app.models.models import User, JobDescription, Resume, Application, Candidate, ResumeSkill
+from app.models.models import User, JobDescription, Resume, Application, Candidate, ResumeSkill, Notification
 from app.schemas.candidate import (
     ResumeCreate, ResumeResponse, ApplicationCreate, ApplicationResponse, 
     CandidateProfileUpdate, CandidateProfileResponse, CandidateApplicationListResponse
@@ -193,6 +193,17 @@ async def apply_job(
         str(new_application.id), 
         resume.cv_url
     )
+
+    # Send Notification to HR
+    notification = Notification(
+        user_id=job.hr_id,
+        title="Có ứng viên mới nộp hồ sơ!",
+        message=f"Một ứng viên vừa nộp hồ sơ vào vị trí {job.title}.",
+        notification_type="application_received",
+        action_url="/hr/candidates"
+    )
+    db.add(notification)
+    await db.commit()
     
     return new_application
 

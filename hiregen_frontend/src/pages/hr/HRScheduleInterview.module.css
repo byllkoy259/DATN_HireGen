@@ -446,10 +446,7 @@
     cursor: pointer;
     transition: all 0.2s;
 }
-.btnConfirm:hover:not(:disabled) {
-    background: var(--primary-dk);
-    transform: translateY(-1px);
-}
+.btnConfirm:hover:not(:disabled) { background: #152e55; }
 .btnConfirm:disabled {
     opacity: 0.65;
     cursor: not-allowed;

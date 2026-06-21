@@ -9,7 +9,7 @@ from sqlalchemy.future import select
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.models.models import User, JobDescription, Application, Candidate, Resume, Company
+from app.models.models import User, JobDescription, Application, Candidate, Resume, Company, Notification
 from app.schemas.application import ApplicationDetailResponse, ApplicationStatusUpdate
 from app.api.deps import get_current_hr
 
@@ -238,7 +238,8 @@ async def update_application_status(
         )
         .options(
             selectinload(Application.candidate), 
-            selectinload(Application.resume)
+            selectinload(Application.resume),
+            selectinload(Application.job)
         )
     )
     
@@ -250,6 +251,23 @@ async def update_application_status(
 
     application.status = status_in.status
     application.reviewed_by = current_hr.id
+
+    status_msg_map = {
+        "reviewed": "Hồ sơ của bạn đã được đánh giá.",
+        "interviewing": "Nhà tuyển dụng đã mời bạn phỏng vấn.",
+        "hired": "Chúc mừng! Bạn đã trúng tuyển.",
+        "rejected": "Rất tiếc, hồ sơ của bạn chưa phù hợp ở thời điểm hiện tại."
+    }
+    msg = status_msg_map.get(status_in.status, "Trạng thái hồ sơ của bạn đã được cập nhật.")
+    
+    notification = Notification(
+        user_id=application.candidate_id,
+        title="Cập nhật trạng thái hồ sơ",
+        message=f"Vị trí {application.job.title}: {msg}",
+        notification_type="status_update",
+        action_url="/candidate/applications"
+    )
+    db.add(notification)
 
     await db.commit()
     await db.refresh(application)

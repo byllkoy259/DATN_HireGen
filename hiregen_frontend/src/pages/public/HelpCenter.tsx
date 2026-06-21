@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Collapse, Button } from 'antd';
+import { Collapse } from 'antd';
 import type { CollapseProps } from 'antd';
-import Logo from '../../components/common/Logo';
 import Header from '../../components/layouts/Header';
 import Footer from '../../components/layouts/Footer';
 import styles from './HelpCenter.module.css';
@@ -84,7 +82,6 @@ const ARTICLES = [
 const SUGGESTED_TAGS = ['chuẩn ITSS', 'tối ưu CV', 'quy tắc Ho-Ren-So', 'Match Score', 'bảo mật'];
 
 const HelpCenter: React.FC = () => {
-    const navigate = useNavigate();
     const [search, setSearch] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [ticketData, setTicketData] = useState({ subject: '', category: 'Tư vấn định hướng sự nghiệp', message: '' });

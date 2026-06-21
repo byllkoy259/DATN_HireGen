@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Modal } from 'antd';
 import styles from './CandidateDashboard.module.css';
 import CandidateLayout from '../../layouts/candidate/CandidateLayout';
 import axiosClient from '../../services/axiosClient';
 
 /* ─── Types ──────────────────────────────────────────────────── */
-type AppStage = 'pending' | 'reviewing' | 'interviewing' | 'rejected' | 'hired';
+type AppStage = 'pending' | 'reviewing' | 'shortlisted' | 'interviewing' | 'rejected' | 'hired';
 
 interface Application {
     id: string;
@@ -34,37 +35,22 @@ interface JobSuggest {
     icon: string;
 }
 
-interface Deadline {
-    date: string;
-    title: string;
-    company: string;
-    daysLeft: number;
-}
-
-interface Notif {
-    id: string;
-    icon: string;
-    iconBg: string;
-    text: string;
-    boldPart?: string;
-    time: string;
-    unread?: boolean;
-}
-
 /* ─── Stage config ───────────────────────────────────────────── */
 const STAGE_META: Record<AppStage, { label: string; cls: string; icon: string }> = {
-    pending:   { label: 'Đã nộp · Chờ phản hồi', cls: 'stageNew',       icon: 'send' },
-    reviewing: { label: 'HR đang xem xét',        cls: 'stageReview',    icon: 'visibility' },
-    interviewing: { label: 'Phỏng vấn',           cls: 'stageInterview', icon: 'event' },
-    hired:     { label: 'Đã nhận việc',            cls: 'stageOffer',     icon: 'celebration' },
-    rejected:  { label: 'Không phù hợp',           cls: 'stageRejected',  icon: 'close' },
+    pending:      { label: 'Mới nộp',              cls: 'stageNew',       icon: 'send' },
+    reviewing:    { label: 'Đang đánh giá',        cls: 'stageReview',    icon: 'visibility' },
+    shortlisted:  { label: 'Đạt sơ tuyển',         cls: 'stageReview',    icon: 'verified' },
+    interviewing: { label: 'Hẹn phỏng vấn',        cls: 'stageInterview', icon: 'event' },
+    rejected:     { label: 'Từ chối',              cls: 'stageRejected',  icon: 'close' },
+    hired:        { label: 'Đã tuyển',             cls: 'stageOffer',     icon: 'celebration' },
 };
 
 const normalizeStage = (status?: string): AppStage => {
     if (status === 'interviewing') return 'interviewing';
     if (status === 'rejected' || status === 'withdrawn') return 'rejected';
     if (status === 'hired' || status === 'accepted' || status === 'offered') return 'hired';
-    if (status === 'reviewing' || status === 'processed' || status === 'shortlisted') return 'reviewing';
+    if (status === 'shortlisted') return 'shortlisted';
+    if (status === 'reviewing' || status === 'processed') return 'reviewing';
     return 'pending';
 };
 
@@ -76,8 +62,9 @@ const CandidateDashboard: React.FC = () => {
     const [userName,    setUserName]    = useState('');
     const [applications,setApplications]= useState<Application[]>([]);
     const [jobs,        setJobs]        = useState<JobSuggest[]>([]);
-    const [deadlines,   setDeadlines]   = useState<Deadline[]>([]);
-    const [notifs,      setNotifs]      = useState<Notif[]>([]);
+    const [notifs, setNotifs]             = useState<any[]>([]);
+    const [interviews, setInterviews]     = useState<any[]>([]);
+    const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
     const [stats,       setStats]       = useState({ applied: 0, views: 0, interviews: 0, saved: 0 });
     const [loading,     setLoading]     = useState(true);
 
@@ -118,11 +105,18 @@ const CandidateDashboard: React.FC = () => {
                     console.warn('applications API not implemented yet', e); 
                 }
 
-                let notifsRes = { data: [] };
+                let notifsRes: any = { data: [] };
                 try { 
                     notifsRes = await axiosClient.get('/api/notifications'); 
                 } catch (e) { 
                     console.warn('notifications API not implemented yet'); 
+                }
+
+                let interviewsRes = { data: [] };
+                try {
+                    interviewsRes = await axiosClient.get('/api/interviews/candidate/me');
+                } catch (e) {
+                    console.warn('interviews API error', e);
                 }
 
                 let name = meRes.data.full_name || '';
@@ -130,14 +124,47 @@ const CandidateDashboard: React.FC = () => {
                 
                 const apps = appsRes.data || [];
                 setApplications(apps.length > 0 ? apps : []);
+                
+                const fetchedInterviews = interviewsRes.data || [];
+                setInterviews(fetchedInterviews);
+
                 setStats({
                     applied:    apps.length || 0,
                     views:      0,
-                    interviews: apps.filter((a: any) => a.stage === 'interviewing').length || 0,
+                    interviews: fetchedInterviews.length || apps.filter((a: any) => a.stage === 'interviewing').length || 0,
                     saved:      0,
                 });
                 
-                setNotifs(notifsRes.data?.length > 0 ? notifsRes.data : []);
+                const formatOldMsg = (msg: string) => {
+                    return msg.replace(/(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\+00:00)/, (match: string) => {
+                        const d = new Date(match);
+                        return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')} ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+                    });
+                };
+
+                if (notifsRes.data?.items) {
+                    setNotifs(notifsRes.data.items.map((n: any) => ({
+                        id: n.id,
+                        unread: !n.is_read,
+                        text: formatOldMsg(n.message),
+                        time: new Date(n.created_at + 'Z').toLocaleString('vi-VN'),
+                        iconBg: '#eff6ff',
+                        icon: 'notifications',
+                        title: n.title
+                    })));
+                } else if (Array.isArray(notifsRes.data)) {
+                    setNotifs(notifsRes.data.map((n: any) => ({
+                        id: n.id,
+                        unread: !n.is_read,
+                        text: formatOldMsg(n.message),
+                        time: new Date(n.created_at + 'Z').toLocaleString('vi-VN'),
+                        iconBg: '#eff6ff',
+                        icon: 'notifications',
+                        title: n.title
+                    })));
+                } else {
+                    setNotifs([]);
+                }
 
             } catch {
                 const token = localStorage.getItem('access_token');
@@ -155,7 +182,7 @@ const CandidateDashboard: React.FC = () => {
                 setNotifs([]);
             } finally {
                 setJobs([]);
-                setDeadlines([]);
+
                 setLoading(false);
             }
         };
@@ -163,13 +190,31 @@ const CandidateDashboard: React.FC = () => {
         load();
     }, []);
 
-    /* ── Upcoming interview (first one in interview stage) */
-    const nextInterview = applications.find(a => a.stage === 'interviewing');
+    /* ── Upcoming interview (first one in future, or latest) */
+    const nextInterviewRaw = interviews.length > 0 ? interviews[0] : null;
+    let nextInterview: any = null;
+    if (nextInterviewRaw) {
+        const relatedApp = applications.find(a => a.id === nextInterviewRaw.application_id);
+        nextInterview = {
+            ...nextInterviewRaw,
+            job_title: relatedApp ? relatedApp.job_title : `Vị trí ID: ${nextInterviewRaw.application_id.substring(0, 8)}`,
+            company: relatedApp ? relatedApp.company : 'Công ty'
+        };
+    }
+    let interviewFormat = nextInterview?.meeting_link ? 'Online' : 'Trực tiếp';
+    let interviewLocation = '';
+    let interviewNotes = nextInterview?.notes || '';
+
+    if (nextInterview?.notes?.includes('Hình thức:')) {
+        interviewFormat = nextInterview.notes.match(/Hình thức: (.*?)(?:\n|$)/)?.[1] || interviewFormat;
+        interviewLocation = nextInterview.notes.match(/Địa điểm: (.*?)(?:\n|$)/)?.[1] || '';
+        const notesMatch = nextInterview.notes.match(/Ghi chú: ([\s\S]*)$/);
+        interviewNotes = notesMatch ? notesMatch[1] : '';
+    }
 
     /* ── Render ─────────────────────────────────────────────── */
     return (
         <CandidateLayout 
-            notifCount={newNotifCount}
             pageTitle={<>{greeting}, {userName}</>}
             pageSubtitle={
                 <>
@@ -287,13 +332,34 @@ const CandidateDashboard: React.FC = () => {
                                         Phỏng vấn sắp tới
                                     </p>
                                     <p className={styles.intTitle}>{nextInterview.job_title}</p>
-                                    <p className={styles.intCo}>{nextInterview.company} · Online</p>
-                                    <p className={styles.intTime}>27/03/2026 · 10:00</p>
-                                    <p className={styles.intTz}>Japan Standard Time (JST)</p>
+                                    <p className={styles.intCo}>{nextInterview.company} · {interviewFormat}</p>
+                                    <p className={styles.intTime}>{new Date(nextInterview.scheduled_time + 'Z').toLocaleTimeString('vi-VN')} - {new Date(nextInterview.scheduled_time + 'Z').toLocaleDateString('vi-VN')}</p>
+                                    <p className={styles.intTz}>Giờ địa phương</p>
                                     <div className={styles.intActions}>
-                                        <button className={styles.btnIntGhost}>Xem JD</button>
-                                        <button className={styles.btnIntWhite}>Vào phòng họp</button>
+                                        <button className={styles.btnIntGhost} onClick={() => navigate('/candidate/applications')}>Xem Đơn</button>
+                                        <button className={styles.btnIntWhite} onClick={() => setIsInterviewModalOpen(true)}>Chi tiết</button>
                                     </div>
+                                    
+                                    <Modal
+                                        title="Chi tiết lịch phỏng vấn"
+                                        open={isInterviewModalOpen}
+                                        onCancel={() => setIsInterviewModalOpen(false)}
+                                        footer={null}
+                                        centered
+                                    >
+                                        <div style={{ padding: '10px 0' }}>
+                                            <p style={{ marginBottom: 10 }}><strong>Thời gian:</strong> {new Date(nextInterview.scheduled_time + 'Z').toLocaleTimeString('vi-VN')} - {new Date(nextInterview.scheduled_time + 'Z').toLocaleDateString('vi-VN')}</p>
+                                            <p style={{ marginBottom: 10 }}><strong>Hình thức:</strong> {interviewFormat}</p>
+                                            <p style={{ marginBottom: 10 }}>
+                                                <strong>Địa điểm & liên kết:</strong>{' '}
+                                                {interviewLocation && <span>{interviewLocation}</span>}
+                                                {interviewLocation && nextInterview.meeting_link && <span> | </span>}
+                                                {nextInterview.meeting_link && <a href={nextInterview.meeting_link} target="_blank" rel="noreferrer">{nextInterview.meeting_link}</a>}
+                                                {!interviewLocation && !nextInterview.meeting_link && 'Chưa cập nhật'}
+                                            </p>
+                                            <p style={{ marginBottom: 10 }}><strong>Ghi chú:</strong> <span style={{ whiteSpace: 'pre-line' }}>{interviewNotes || 'Không có'}</span></p>
+                                        </div>
+                                    </Modal>
                                 </div>
                             ) : (
                                 <div className={styles.noInterviewCard}>
@@ -305,27 +371,27 @@ const CandidateDashboard: React.FC = () => {
                                 </div>
                             )}
 
-                            {/* Deadlines */}
+                            {/* Notifications */}
                             <div className={styles.card}>
                                 <div className={styles.cardHeader} style={{ padding: '12px 16px' }}>
                                     <h3 className={styles.cardTitle} style={{ fontSize: 13 }}>
-                                        <span className="material-symbols-outlined" style={{ fontSize: 18, marginRight: 6 }}>schedule</span> Hạn nộp sắp tới
+                                        <span className="material-symbols-outlined" style={{ fontSize: 18, marginRight: 6 }}>notifications</span> Thông báo
                                     </h3>
+                                    {newNotifCount > 0 && (
+                                        <span className={styles.notifCountBadge}>{newNotifCount} mới</span>
+                                    )}
                                 </div>
-                                <div style={{ padding: '10px 16px' }}>
-                                    {deadlines.map((d, i) => (
-                                        <div key={i} className={styles.dlItem}>
-                                            <span className={styles.dlDate}>{d.date}</span>
-                                            <span
-                                                className={styles.dlDot}
-                                                style={{ background: d.daysLeft <= 1 ? '#ef4444' : d.daysLeft <= 14 ? '#b45309' : '#c8d6ec' }}
-                                            />
-                                            <div className={styles.dlInfo}>
-                                                <p className={styles.dlTitle}>{d.title} · {d.company}</p>
-                                                <p className={d.daysLeft <= 1 ? styles.dlWarn : styles.dlSub}>
-                                                    {d.daysLeft <= 1 ? `Còn ${d.daysLeft} ngày` : `Còn ${d.daysLeft} ngày`}
-                                                </p>
+                                <div className={styles.notifList}>
+                                    {notifs.map(n => (
+                                        <div key={n.id} className={`${styles.notifItem} ${n.unread ? styles.notifUnreadItem : ''}`}>
+                                            <div className={styles.notifIcon} style={{ background: n.iconBg }}>
+                                                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{n.icon}</span>
                                             </div>
+                                            <div className={styles.notifBody}>
+                                                <p className={styles.notifText}>{n.text}</p>
+                                                <p className={styles.notifTime}>{n.time}</p>
+                                            </div>
+                                            {n.unread && <div className={styles.unreadDot} />}
                                         </div>
                                     ))}
                                 </div>
@@ -367,31 +433,7 @@ const CandidateDashboard: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Notifications */}
-                        <div className={styles.card}>
-                            <div className={styles.cardHeader}>
-                                <h3 className={styles.cardTitle}>
-                                    <span className="material-symbols-outlined" style={{ fontSize: 20, marginRight: 6 }}>notifications</span> Thông báo
-                                </h3>
-                                {newNotifCount > 0 && (
-                                    <span className={styles.notifCountBadge}>{newNotifCount} mới</span>
-                                )}
-                            </div>
-                            <div className={styles.notifList}>
-                                {notifs.map(n => (
-                                    <div key={n.id} className={`${styles.notifItem} ${n.unread ? styles.notifUnreadItem : ''}`}>
-                                        <div className={styles.notifIcon} style={{ background: n.iconBg }}>
-                                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>{n.icon}</span>
-                                        </div>
-                                        <div className={styles.notifBody}>
-                                            <p className={styles.notifText}>{n.text}</p>
-                                            <p className={styles.notifTime}>{n.time}</p>
-                                        </div>
-                                        {n.unread && <div className={styles.unreadDot} />}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
+
                     </div>
                 </>
             )}

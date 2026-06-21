@@ -224,7 +224,8 @@ const HRDashboard: React.FC = () => {
                                 text: `${a.applicant_name || 'Một ứng viên'} đã nộp CV vào vị trí ${job.title || 'chưa có tiêu đề'}`,
                                 time: new Date(a.applied_at || Date.now()).toLocaleDateString('vi-VN'),
                                 icon: score >= 80 ? 'auto_awesome' : 'description',
-                            });
+                                timestamp: new Date(a.applied_at || Date.now()).getTime(),
+                            } as any);
                             statusCounts[normalizeApplicationBucket(a.status)]++;
                         });
 
@@ -259,6 +260,8 @@ const HRDashboard: React.FC = () => {
                 });
                 setPipeline(pipelineRows);
                 setPipelinePage(1);
+                
+                dynamicActivities.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
                 setActivities(dynamicActivities.slice(0, 5));
 
                 const interviewCount = allApps.filter(a => a.status === 'interviewing').length;

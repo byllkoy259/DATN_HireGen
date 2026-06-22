@@ -80,7 +80,7 @@ app.include_router(hr.router)
 app.include_router(upload.router)
 app.include_router(ai.router)
 
-@app.get("/")
+@app.get("/", methods=["GET", "HEAD"])
 async def root():
     return {
         "message": "Welcome to HireGen API",
@@ -88,6 +88,6 @@ async def root():
         "database_status": "Configured" if settings.DATABASE_URL else "Error"
     }
 
-@app.get("/health-check")
+@app.get("/health-check", methods=["GET", "HEAD"])
 async def health_check():
     return {"status": "healthy"}

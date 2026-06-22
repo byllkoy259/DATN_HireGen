@@ -81,6 +81,7 @@ app.include_router(upload.router)
 app.include_router(ai.router)
 
 @app.get("/")
+@app.head("/")
 async def root():
     return {
         "message": "Welcome to HireGen API",
@@ -89,5 +90,6 @@ async def root():
     }
 
 @app.get("/health-check")
+@app.head("/health-check")
 async def health_check():
     return {"status": "healthy"}

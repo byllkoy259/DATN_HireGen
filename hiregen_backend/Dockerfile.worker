@@ -1,0 +1,16 @@
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt .
+RUN pip install --root-user-action=ignore --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Celery chạy background, http.server giữ cổng ở foreground
+CMD sh -c "python -m http.server ${PORT:-10000} & celery -A app.core.celery_app:celery_app worker --loglevel=info --pool=solo"

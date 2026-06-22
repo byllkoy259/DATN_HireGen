@@ -42,12 +42,11 @@ services:
       - key: CHROMA_PORT
         value: "8000"
 
-  - type: worker
+  - type: web
     name: hiregen-celery-worker
     runtime: docker
-    dockerfilePath: ./hiregen_backend/Dockerfile
+    dockerfilePath: ./hiregen_backend/Dockerfile.worker
     dockerContext: ./hiregen_backend
-    startCommand: celery -A app.core.celery_app worker --loglevel=info --concurrency=1
     envVars:
       - key: POSTGRES_USER
         sync: false

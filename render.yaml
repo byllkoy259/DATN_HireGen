@@ -2,7 +2,7 @@ services:
   - type: web
     name: hiregen-backend
     runtime: docker
-    dockerfilePath: ./hiregen_backend/Dockerfile
+    dockerfilePath: ./hiregen_backend/Dockerfile.backend
     dockerContext: ./hiregen_backend
     envVars:
       - key: POSTGRES_USER

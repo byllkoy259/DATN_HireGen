@@ -1,5 +1,4 @@
 from google import genai
-from sentence_transformers import SentenceTransformer
 from app.core.config import settings
 
 # Gemini Client
@@ -16,6 +15,7 @@ def get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
         print("[AI] Đang tải mô hình SentenceTransformer vào RAM...")
+        from sentence_transformers import SentenceTransformer
         _embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
     return _embedding_model
 

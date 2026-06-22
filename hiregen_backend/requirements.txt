@@ -17,6 +17,5 @@ python-jose[cryptography]
 python-multipart
 redis
 scikit-learn
-sentence-transformers
 sqlalchemy
 uvicorn[standard]

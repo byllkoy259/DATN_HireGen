@@ -26,7 +26,7 @@ def get_chroma_collection():
         return cv_collection
     try:
         chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
-        cv_collection = chroma_client.get_or_create_collection(name="baseline_candidate_cvs")
+        cv_collection = chroma_client.get_or_create_collection(name="baseline_candidate_cvs_gemini")
         return cv_collection
     except Exception as exc:
         print(f"[ChromaDB Warning] Vector store is unavailable: {exc}")

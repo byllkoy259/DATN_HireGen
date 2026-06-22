@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 from app.services.ai.embedding import get_text_embedding
 
 def calculate_cosine_similarity_score(vector_a: list, vector_b: list) -> float:
@@ -7,6 +6,7 @@ def calculate_cosine_similarity_score(vector_a: list, vector_b: list) -> float:
     Tính toán độ tương đồng Cosine giữa 2 vector.
     Trả về điểm số Matching dạng phần trăm (%).
     """
+    from sklearn.metrics.pairwise import cosine_similarity
     # Reshape về dạng 2D array (1, n) theo yêu cầu của scikit-learn
     arr_a = np.array(vector_a).reshape(1, -1)
     arr_b = np.array(vector_b).reshape(1, -1)

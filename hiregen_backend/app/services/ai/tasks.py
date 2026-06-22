@@ -1580,6 +1580,9 @@ async def async_process_cv_pipeline(application_id: str, file_url: str):
 @celery_app.task(name="process_candidate_cv_task")
 def process_candidate_cv_task(application_id: str, file_url: str):
     async def runner():
-        await async_process_cv_pipeline(application_id, file_url)
+        try:
+            await async_process_cv_pipeline(application_id, file_url)
+        finally:
+            await engine.dispose()
 
     asyncio.run(runner())

@@ -11,13 +11,13 @@ def generate_embedding(text: str) -> list[float]:
     print("[AI] Đang gọi Gemini API để tạo vector embedding...")
     try:
         response = client.models.embed_content(
-            model='text-embedding-004',
+            model='gemini-embedding-001',
             contents=text,
         )
         return response.embeddings[0].values
     except Exception as e:
         print(f"[AI Error] Lỗi khi gọi Gemini Embedding: {e}")
-        # Trả về vector rỗng 768 chiều nếu lỗi để không làm sập app
-        return [0.0] * 768 
+        # Trả về vector rỗng 3072 chiều nếu lỗi để không làm sập app
+        return [0.0] * 3072
 
 print("Đã khởi tạo xong cấu trúc các dịch vụ AI!")

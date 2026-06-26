@@ -42,7 +42,7 @@ Dự án được triển khai trên môi trường Docker với cấu hình m�
 ### Bước 2: Clone repository
 Tải mã nguồn dự án về máy:
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/byllkoy259/DATN_HireGen.git
 cd DATN_HireGen
 ```
 

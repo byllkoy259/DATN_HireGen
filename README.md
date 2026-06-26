@@ -1,4 +1,4 @@
-# Hệ thống Tuyển dụng và Đánh giá Ứng viên bằng AI (HireGen)
+# Hệ thống Hỗ trợ tuyển dụng và Đánh giá ứng viên ngành IT cho Thị trường Nhật Bản sử dụng AI
 
 ## 1. Giới thiệu
 
@@ -84,5 +84,5 @@ npm run dev
 ---
 
 ## 5. Thông tin dự án
-- **Dự án:** Đồ án Tốt nghiệp - Hệ thống Hỗ trợ tuyển dụng và Đánh giá ứng viên ngành IT cho Thị trường Nhật Bản sử dụng AI
+- **Dự án:** Đồ án Tốt nghiệp
 - **Chương trình đào tạo:** HEDPI - Đại học Bách khoa Hà Nội (HUST)

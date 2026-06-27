@@ -82,6 +82,8 @@ services:
         sync: false
       - key: CHROMA_HOST
         sync: false
+      - key: CHROMA_PORT
+        value: "8000"
 
   - type: web
     name: hiregen-chromadb

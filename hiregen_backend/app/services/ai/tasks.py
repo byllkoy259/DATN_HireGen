@@ -25,7 +25,11 @@ def get_chroma_collection():
     if cv_collection is not None:
         return cv_collection
     try:
-        chroma_client = chromadb.HttpClient(host=settings.CHROMA_HOST, port=settings.CHROMA_PORT)
+        chroma_client = chromadb.HttpClient(
+            host=settings.CHROMA_HOST, 
+            port=settings.CHROMA_PORT,
+            ssl=True
+        )
         cv_collection = chroma_client.get_or_create_collection(name="baseline_candidate_cvs_gemini_v2")
         return cv_collection
     except Exception as exc:

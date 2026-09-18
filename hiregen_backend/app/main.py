@@ -33,6 +33,7 @@ async def create_init_admin():
         else:
             print("Tài khoản Admin đã tồn tại, bỏ qua.")
 
+# Quản lý vòng đời ứng dụng FastAPI
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_init_admin()

@@ -21,6 +21,7 @@ class Base(DeclarativeBase):
     pass
 
 # 4. Dependency function cung cấp session bất đồng bộ cho API
+# Cung cấp kết nối CSDL bất đồng bộ cho các route trong FastAPI
 async def get_db():
     async with AsyncSessionLocal() as session:
         yield session
